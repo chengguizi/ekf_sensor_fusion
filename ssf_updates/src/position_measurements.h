@@ -69,7 +69,7 @@ private:
 
 	void init(double scale)
 	{
-	    Eigen::Matrix<double, 3, 1> p, v, b_w, b_a, g, w_m, a_m;
+	    Eigen::Matrix<double, 3, 1> p, v, b_w, b_a, g, w_m, a_m, m_m;
 	    Eigen::Quaternion<double> q;
 	    ssf_core::SSF_Core::ErrorStateCov P;
 
@@ -96,7 +96,7 @@ private:
 		p = q_wv_.conjugate().toRotationMatrix()*p_vc_/scale - q.toRotationMatrix()*p_ci_;
 
 		// call initialization in core
-		ssf_core_.initialize(p,v,q,b_w,b_a,scale,q_wv_,P,w_m,a_m,g,q_ci_,p_ci_);
+		ssf_core_.initialize(p,v,q,b_w,b_a,scale,q_wv_,P,w_m,a_m, m_m, g,q_ci_,p_ci_);
 
 	    ROS_INFO_STREAM("filter initialized to: \n" <<
 	        "position: [" << p[0] << ", " << p[1] << ", " << p[2] << "]" << std::endl <<

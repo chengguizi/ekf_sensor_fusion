@@ -29,19 +29,31 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
 
-#ifndef POSE_MEASUREMENTS_H
-#define POSE_MEASUREMENTS_H
+#ifndef VISIONPOSE_MEASUREMENTS_H
+#define VISIONPOSE_MEASUREMENTS_H
 
 #include <ros/ros.h>
 #include <ssf_core/measurement.h>
-#include "pose_sensor.h"
+#include "visionpose_sensor.h"
 
-class PoseMeasurements : public ssf_core::Measurements
+class VisionPoseMeasurements : public ssf_core::Measurements
 {
 public:
-  PoseMeasurements()
+  VisionPoseMeasurements() // hm: the first constructor to call, since "main.cpp"
   {
-    addHandler(new PoseSensorHandler(this));
+    addHandler(new VisionPoseSensorHandler(this));
+    // hm: addHandler is defined in "measurement.h" in ssf_core
+    // data structure is std::vector<MeasurementHandler*>
+    // "handlers" is not really used, only for keeping track of the new object, and to be destroyed in the desctructor
+
+    // hm: VisionPoseSensorHandler(*) is defined in "visionpose_sensor.h/cpp", this initialise parameters including
+    // measurement_world_sensor and use_fixed_covariance
+    // subscribe() is called as well
+    //  - "visionpose_measurement" topic
+    //  - "meas_noise1" "meas_noise2" reconfigurable
+
+    // VisionPoseSensorHandler(*) is responsible for handling measurementCallback
+    // - it also inherit and public SSF_Core() instance: ssf_core_. this is how SSF_core is engaged
 
     ros::NodeHandle pnh("~");
     pnh.param("init/p_ci/x", p_ci_[0], 0.0);
@@ -59,13 +71,13 @@ public:
     pnh.param("init/q_wv/y", q_wv_.y(), 0.0);
     pnh.param("init/q_wv/z", q_wv_.z(), 0.0);
     q_wv_.normalize();
+  
   }
 
 private:
-
   Eigen::Matrix<double, 3, 1> p_ci_; ///< initial distance camera-IMU
-  Eigen::Quaternion<double> q_ci_; ///< initial rotation camera-IMU
-  Eigen::Quaternion<double> q_wv_; ///< initial rotation wolrd-vision
+  Eigen::Quaternion<double> q_ci_;   ///< initial rotation camera-IMU
+  Eigen::Quaternion<double> q_wv_;   ///< initial rotation wolrd-vision
 
   void init(double scale)
   {
@@ -73,17 +85,22 @@ private:
     Eigen::Quaternion<double> q;
     ssf_core::SSF_Core::ErrorStateCov P;
 
-	// init values
-	g << 0, 0, 9.81;	/// gravity
-	b_w << 0,0,0;		/// bias gyroscopes
-	b_a << 0,0,0;		/// bias accelerometer
+    // init values
+    // singapore 9.7760
+    g << 0, -9.776, 0; /// gravity
+    b_w << 0, 0, 0;  /// bias gyroscopes
+    b_a << 0, 0, 0;  /// bias accelerometer
 
-	v << 0,0,0;			/// robot velocity (IMU centered)
-	w_m << 0,0,0;		/// initial angular velocity
-	a_m =g;				/// initial acceleration
-
+    v << 0, 0, 0;   /// robot velocity (IMU centered)
+    w_m << 0, 0, 0; /// initial angular velocity
+    a_m = g;        /// initial acceleration
+    m_m << 0, 0, 0; /// initial magnetism
+    
     P.setZero(); // error state covariance; if zero, a default initialization in ssf_core is used
 
+    ROS_INFO_STREAM("q_cv: (w,x,y,z): [" << q_cv_.w() << ", " << q_cv_.x() << ", " << q_cv_.y() << ", " << q_cv_.z() << "]" << std::endl);
+    ROS_INFO_STREAM("q_wv: (w,x,y,z): [" << q_wv_.w() << ", " << q_wv_.x() << ", " << q_wv_.y() << ", " << q_wv_.z()  << "]"<< std::endl);
+    
     // check if we have already input from the measurement sensor
     if (p_vc_.norm() == 0)
       ROS_WARN_STREAM("No measurements received yet to initialize position - using [0 0 0]");
@@ -91,20 +108,25 @@ private:
       ROS_WARN_STREAM("No measurements received yet to initialize attitude - using [1 0 0 0]");
 
     // calculate initial attitude and position based on sensor measurements
+    // hm: q_ci_ camera in imu frame (ok. cross checked with msf, should be q_ic, i on top)
+    // hm: q_cv_ sensor measurement, camera in vision frame
+    // hm: q_wv !!!! world in vision frame
     q = (q_ci_ * q_cv_.conjugate() * q_wv_).conjugate();
+    // q = Eigen::Quaternion<double>(0.976, -0.216, 0.0, 0.0);
+
     q.normalize();
     p = q_wv_.conjugate().toRotationMatrix() * p_vc_ / scale - q.toRotationMatrix() * p_ci_;
 
     // call initialization in core
     ssf_core_.initialize(p, v, q, b_w, b_a, scale, q_wv_, P, w_m, a_m, m_m, g, q_ci_, p_ci_);
 
-    ROS_INFO_STREAM("filter initialized to: \n" <<
-        "position: [" << p[0] << ", " << p[1] << ", " << p[2] << "]" << std::endl <<
-        "scale:" << scale << std::endl <<
-        "attitude (w,x,y,z): [" << q.w() << ", " << q.x() << ", " << q.y() << ", " << q.z() << std::endl <<
-        "p_ci: [" << p_ci_[0] << ", " << p_ci_[1] << ", " << p_ci_[2] << std::endl <<
-        "q_ci: (w,x,y,z): [" << q_ci_.w() << ", " << q_ci_.x() << ", " << q_ci_.y() << ", " << q_ci_.z() << "]");
+    ROS_INFO_STREAM("filter initialized to: \n"
+                    << "position: [" << p[0] << ", " << p[1] << ", " << p[2] << "]" << std::endl
+                    << "scale:" << scale << std::endl
+                    << "attitude (w,x,y,z): [" << q.w() << ", " << q.x() << ", " << q.y() << ", " << q.z() << std::endl
+                    << "p_ci: [" << p_ci_[0] << ", " << p_ci_[1] << ", " << p_ci_[2] << std::endl
+                    << "q_ci: (w,x,y,z): [" << q_ci_.w() << ", " << q_ci_.x() << ", " << q_ci_.y() << ", " << q_ci_.z() << "]");
   }
 };
 
-#endif /* POSE_MEASUREMENTS_H */
+#endif /* VICONPOSE_MEASUREMENTS_H */

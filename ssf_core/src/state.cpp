@@ -49,6 +49,7 @@ void State::reset(){
 
   w_m_.setZero();
   a_m_.setZero();
+  m_m_.setZero();     // added for magnetometer readings
 
   q_int_.setIdentity();
 

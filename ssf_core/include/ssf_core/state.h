@@ -68,6 +68,7 @@ public:
   // system inputs
   Eigen::Matrix<double,3,1> w_m_;         ///< angular velocity from IMU
   Eigen::Matrix<double,3,1> a_m_;         ///< acceleration from IMU
+  Eigen::Matrix<double,3,1> m_m_;         ///< magnetometer readings 
 
   Eigen::Quaternion<double> q_int_;       ///< this is the integrated ang. vel. no corrections applied, to use for delta rot in external algos...
 

@@ -29,48 +29,39 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
 
+#ifndef VICONPOSE_SENSOR_H
+#define VICONPOSE_SENSOR_H
+
 #include <ssf_core/measurement.h>
+#include <geometry_msgs/TransformStamped.h>
 
-namespace ssf_core{
+// for visensor pose
+// #include <geometry_msgs/PoseStamped.h>
 
-Measurements::Measurements()
+class ViconPoseSensorHandler : public ssf_core::MeasurementHandler
 {
-	// setup: initial pos, att, of measurement sensor
+private:
+  // measurements
+  Eigen::Matrix<double, 3, 1> z_p_; /// sensor-position measurement
+  Eigen::Quaternion<double> z_q_;   /// sensor-attitude measurement
 
-	p_vc_ = Eigen::Matrix<double, 3, 1>::Constant(0);
-	q_cv_ = Eigen::Quaternion<double>(1, 0, 0, 0);
+  double n_zp_;                     /// noise for position measurement
+  double n_zq_;                     /// noise for attitude measurement
 
-	ssf_core_.registerCallback(&Measurements::Config,this);
-}
+  ros::Subscriber subMeasurement_;
 
-Measurements::~Measurements()
-{
-	for (Handlers::iterator it(handlers.begin()); it != handlers.end(); ++it)
-		delete *it;
+  bool measurement_world_sensor_; ///< defines if the pose of the sensor is measured in world coordinates (true, default) or vice versa (false, e.g. PTAM)
+  bool use_fixed_covariance_; ///< use fixed covariance set by dynamic reconfigure
 
-	delete reconfServer_;
-	return;
-}
+  void subscribe();
+  void measurementCallback(const geometry_msgs::TransformStampedConstPtr & msg);
+  // to reading visensor pose measurements
+  // void measurementCallback(const geometry_msgs::PoseStampedConstPtr & msg);
+  void noiseConfig(ssf_core::SSF_CoreConfig& config, uint32_t level);
 
+public:
+  ViconPoseSensorHandler();
+  ViconPoseSensorHandler(ssf_core::Measurements* meas);
+};
 
-void Measurements::Config(ssf_core::SSF_CoreConfig& config, uint32_t level){
-  if(level & ssf_core::SSF_Core_INIT_FILTER){  // hm: defined here: INIT_FILTER     = gen.const("INIT_FILTER",
-		init(config.scale_init);
-		config.init_filter = false;
-	}
-	else if(level & ssf_core::SSF_Core_SET_HEIGHT){
-		if(p_vc_.norm()==0)
-		{
-			ROS_WARN_STREAM("No measurements received yet to initialize position - using scale factor " << config.scale_init << " for init");
-			init(config.scale_init);
-		}
-		else
-		{
-			init(p_vc_[2]/config.height);
-			ROS_WARN_STREAM("init filter (set scale to: " << p_vc_[2]/config.height << ")");
-		}
-		config.set_height = false;
-	}
-}
-
-}; // end namespace
+#endif /* VICONPOSE_SENSOR_H */

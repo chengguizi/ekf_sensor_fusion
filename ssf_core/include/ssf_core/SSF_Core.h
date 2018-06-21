@@ -45,6 +45,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sensor_fusion_comm/ExtEkf.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <sensor_msgs/Imu.h>
+#include <ssf_core/visensor_imu.h>
 
 #include <vector>
 #include <ssf_core/state.h>
@@ -68,7 +69,8 @@ public:
                   const Eigen::Quaternion<double> & q, const Eigen::Matrix<double, 3, 1> & b_w,
                   const Eigen::Matrix<double, 3, 1> & b_a, const double & L, const Eigen::Quaternion<double> & q_wv,
                   const Eigen::Matrix<double, N_STATE, N_STATE> & P, const Eigen::Matrix<double, 3, 1> & w_m,
-                  const Eigen::Matrix<double, 3, 1> & a_m, const Eigen::Matrix<double, 3, 1> & g,
+                  const Eigen::Matrix<double, 3, 1> & a_m, const Eigen::Matrix<double, 3, 1> & m_m,
+                  const Eigen::Matrix<double, 3, 1> & g,
                   const Eigen::Quaternion<double> & q_ci, const Eigen::Matrix<double, 3, 1> & p_ci);
 
   /// retreive all state information at time t. Used to build H, residual and noise matrix by update sensors
@@ -76,6 +78,8 @@ public:
 
   /// get all state information at a given index in the ringbuffer
   bool getStateAtIdx(State* timestate, unsigned char idx);
+
+  bool isInitFilter(){return config_.init_filter;}
 
   SSF_Core();
   ~SSF_Core();
@@ -110,10 +114,13 @@ private:
   Eigen::Matrix<double, 3, 3> R_IW_; ///< Rot IMU->World
   Eigen::Matrix<double, 3, 3> R_CI_; ///< Rot Camera->IMU
   Eigen::Matrix<double, 3, 3> R_WV_; ///< Rot World->Vision
+  
+  // magnetometer initial compass heading
+  double compassHeading; 
 
   bool initialized_;
   bool predictionMade_;
-
+  bool setCompassHeading;
   /// enables internal state predictions for log replay
   /**
    * used to determine if internal states get overwritten by the external
@@ -145,7 +152,7 @@ private:
   sensor_fusion_comm::ExtEkf hl_state_buf_; ///< buffer to store external propagation data
 
   // dynamic reconfigure
-  ReconfigureServer *reconfServer_;
+  ReconfigureServer *reconfServer_; // hm: it is this - dynamic_reconfigure::Server<ssf_core::SSF_CoreConfig>
   typedef boost::function<void(ssf_core::SSF_CoreConfig& config, uint32_t level)> CallbackType;
   std::vector<CallbackType> callbacks_;
 

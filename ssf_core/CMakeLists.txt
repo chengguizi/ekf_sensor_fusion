@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(ssf_core)
 
-find_package(catkin REQUIRED COMPONENTS roscpp sensor_msgs dynamic_reconfigure cmake_modules sensor_fusion_comm)
+find_package(catkin REQUIRED COMPONENTS roscpp rospy sensor_msgs dynamic_reconfigure cmake_modules sensor_fusion_comm std_msgs message_generation)
 
 # Set the build type.  Options are:
 #  Coverage       : w/ debug symbols, w/o optimization, w/ code-coverage
@@ -19,27 +19,26 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
 # Generate dynamic parameters
 
-#add_message_files(
-#  FILES
-  # TODO: List your msg files here
-#)
+add_message_files(FILES visensor_imu.msg)
+
+generate_messages(DEPENDENCIES geometry_msgs std_msgs)
 
 add_definitions (-Wall -O3)
 
 # get eigen
-find_package(Eigen REQUIRED)
-include_directories(include ${Eigen_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS})
+find_package(Eigen3 REQUIRED)
+include_directories(include ${EIGEN3_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS})
 
 generate_dynamic_reconfigure_options(cfg/SSF_Core.cfg)
 
 catkin_package(
     DEPENDS
-    CATKIN_DEPENDS roscpp sensor_msgs dynamic_reconfigure sensor_fusion_comm
-    INCLUDE_DIRS include ${Eigen_INCLUDE_DIRS}
+    CATKIN_DEPENDS roscpp sensor_msgs dynamic_reconfigure sensor_fusion_comm message_runtime
+    INCLUDE_DIRS include ${EIGEN3_INCLUDE_DIRS}
     LIBRARIES ssf_core
 )
 
 add_library(ssf_core src/SSF_Core.cpp src/measurement.cpp src/state.cpp)
-add_dependencies(ssf_core ${PROJECT_NAME}_gencfg)
+add_dependencies(ssf_core ${PROJECT_NAME}_gencfg ssf_core_generate_messages_cpp)
 target_link_libraries(ssf_core ${catkin_LIBRRIES})
 

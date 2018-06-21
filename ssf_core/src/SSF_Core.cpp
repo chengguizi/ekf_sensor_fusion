@@ -46,13 +46,13 @@ SSF_Core::SSF_Core()
   ros::NodeHandle pnh("~");
 
   pubState_ = nh.advertise<sensor_fusion_comm::DoubleArrayStamped> ("state_out", 1);
-  pubCorrect_ = nh.advertise<sensor_fusion_comm::ExtEkf> ("correction", 1);
+  //pubCorrect_ = nh.advertise<sensor_fusion_comm::ExtEkf> ("correction", 1);
   pubPose_ = nh.advertise<geometry_msgs::PoseWithCovarianceStamped> ("pose", 1);
   pubPoseCrtl_ = nh.advertise<sensor_fusion_comm::ExtState> ("ext_state", 1);
   msgState_.data.resize(nFullState_, 0);
 
   subImu_ = nh.subscribe("imu_state_input", 1 /*N_STATE_BUFFER*/, &SSF_Core::imuCallback, this);
-  subState_ = nh.subscribe("hl_state_input", 1 /*N_STATE_BUFFER*/, &SSF_Core::stateCallback, this);
+  // subState_ = nh.subscribe("hl_state_input", 1 /*N_STATE_BUFFER*/, &SSF_Core::stateCallback, this);
 
   msgCorrect_.state.resize(HLI_EKF_STATE_SIZE, 0);
   hl_state_buf_.state.resize(HLI_EKF_STATE_SIZE, 0);
@@ -60,11 +60,14 @@ SSF_Core::SSF_Core()
   qvw_inittimer_ = 1;
 
   pnh.param("data_playback", data_playback_, false);
+
+  //register dyn config list
+  registerCallback(&SSF_Core::DynConfig, this);
+
+  // set call back for reconfigure server should come last, so DynConfig is called for initialisation
   reconfServer_ = new ReconfigureServer(ros::NodeHandle("~"));
   ReconfigureServer::CallbackType f = boost::bind(&SSF_Core::Config, this, _1, _2);
   reconfServer_->setCallback(f);
-  //register dyn config list
-  registerCallback(&SSF_Core::DynConfig, this);
 }
 
 SSF_Core::~SSF_Core()
@@ -77,8 +80,8 @@ void SSF_Core::initialize(const Eigen::Matrix<double, 3, 1> & p, const Eigen::Ma
                           const Eigen::Matrix<double, 3, 1> & b_a, const double & L,
                           const Eigen::Quaternion<double> & q_wv, const Eigen::Matrix<double, N_STATE, N_STATE> & P,
                           const Eigen::Matrix<double, 3, 1> & w_m, const Eigen::Matrix<double, 3, 1> & a_m,
-                          const Eigen::Matrix<double, 3, 1> & g, const Eigen::Quaternion<double> & q_ci,
-                          const Eigen::Matrix<double, 3, 1> & p_ci)
+                          const Eigen::Matrix<double, 3, 1> & m_m, const Eigen::Matrix<double, 3, 1> & g, 
+                          const Eigen::Quaternion<double> & q_ci, const Eigen::Matrix<double, 3, 1> & p_ci)
 {
   initialized_ = false;
   predictionMade_ = false;
@@ -107,6 +110,7 @@ void SSF_Core::initialize(const Eigen::Matrix<double, 3, 1> & p, const Eigen::Ma
   state.w_m_ = w_m;
   state.q_int_ = state.q_wv_;
   state.a_m_ = a_m;
+  state.m_m_ = m_m;
   state.time_ = ros::Time::now().toSec();
 
   if (P.maxCoeff() == 0 && P.minCoeff() == 0)
@@ -172,7 +176,7 @@ void SSF_Core::initialize(const Eigen::Matrix<double, 3, 1> & p, const Eigen::Ma
   msgCorrect_.state[14] = state.b_a_[1];
   msgCorrect_.state[15] = state.b_a_[2];
   msgCorrect_.flag = sensor_fusion_comm::ExtEkf::initialization;
-  pubCorrect_.publish(msgCorrect_);
+  //pubCorrect_.publish(msgCorrect_);
 
   // increase state pointers
   idx_state_++;
@@ -183,6 +187,7 @@ void SSF_Core::initialize(const Eigen::Matrix<double, 3, 1> & p, const Eigen::Ma
 
 
 void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg)
+// void SSF_Core::imuCallback(const ssf_core::visensor_imuConstPtr & msg)
 {
 
   if (!initialized_)
@@ -213,7 +218,7 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg)
     }
   }
 
-  propagateState(StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_);
+  propagateState(StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_);  
   predictProcessCovariance(StateBuffer_[idx_P_].time_ - StateBuffer_[(unsigned char)(idx_P_ - 1)].time_);
 
   checkForNumeric((double*)(&StateBuffer_[idx_state_ - 1].p_[0]), 3, "prediction p");
@@ -236,7 +241,7 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg)
 
 void SSF_Core::stateCallback(const sensor_fusion_comm::ExtEkfConstPtr & msg)
 {
-
+  ROS_WARN("in stateCallback()");
   if (!initialized_)
     return; // // early abort // //
 
@@ -340,8 +345,8 @@ void SSF_Core::propagateState(const double dt)
   Eigen::Matrix<double, 3, 1> dv;
   ConstVector3 ew = cur_state.w_m_ - cur_state.b_w_;
   ConstVector3 ewold = prev_state.w_m_ - prev_state.b_w_;
-  ConstVector3 ea = cur_state.a_m_ - cur_state.b_a_;
-  ConstVector3 eaold = prev_state.a_m_ - prev_state.b_a_;
+  ConstVector3 ea = cur_state.a_m_ - cur_state.b_a_; // estimated acceleration of current state
+  ConstVector3 eaold = prev_state.a_m_ - prev_state.b_a_; // estimated acceleration of previous state
   ConstMatrix4 Omega = omegaMatJPL(ew);
   ConstMatrix4 OmegaOld = omegaMatJPL(ewold);
   Matrix4 OmegaMean = omegaMatJPL((ew + ewold) / 2);
@@ -372,13 +377,14 @@ void SSF_Core::propagateState(const double dt)
   cur_state.q_int_.coeffs() = quat_int * prev_state.q_int_.coeffs();
   cur_state.q_int_.normalize();
 
+  // hm: this part shows that C(q_) is a passive transformation from imu to world frame
   dv = (cur_state.q_.toRotationMatrix() * ea + prev_state.q_.toRotationMatrix() * eaold) / 2;
   cur_state.v_ = prev_state.v_ + (dv - g_) * dt;
   cur_state.p_ = prev_state.p_ + ((cur_state.v_ + prev_state.v_) / 2 * dt);
-  idx_state_++;
+  idx_state_++;  // hm: unsigned char, so will automatically become a ring buffer
 }
 
-
+  
 void SSF_Core::predictProcessCovariance(const double dt)
 {
 
@@ -398,7 +404,7 @@ void SSF_Core::predictProcessCovariance(const double dt)
   ConstVector3 npicv = Eigen::Vector3d::Constant(config_.noise_pic);
 
   // bias corrected IMU readings
-  ConstVector3 ew = StateBuffer_[idx_P_].w_m_ - StateBuffer_[idx_P_].b_w_;
+  ConstVector3 ew = StateBuffer_[idx_P_].w_m_ - StateBuffer_[idx_P_].b_w_;  // ew: expectation of w, no bias
   ConstVector3 ea = StateBuffer_[idx_P_].a_m_ - StateBuffer_[idx_P_].b_a_;
 
   ConstMatrix3 a_sk = skew(ea);
@@ -458,7 +464,7 @@ bool SSF_Core::getStateAtIdx(State* timestate, unsigned char idx)
 }
 
 unsigned char SSF_Core::getClosestState(State* timestate, ros::Time tstamp, double delay)
-{
+{  
   if (!predictionMade_)
   {
     timestate->time_ = -1;
@@ -472,7 +478,7 @@ unsigned char SSF_Core::getClosestState(State* timestate, ros::Time tstamp, doub
   while (fabs(timenow - StateBuffer_[idx].time_) < timedist) // timedist decreases continuously until best point reached... then rises again
   {
     timedist = fabs(timenow - StateBuffer_[idx].time_);
-    idx--;
+    idx--; // hm: beyond 0, will automatically become 255
   }
   idx++; // we subtracted one too much before....
 
@@ -482,7 +488,10 @@ unsigned char SSF_Core::getClosestState(State* timestate, ros::Time tstamp, doub
   started = true;
 
   if (StateBuffer_[idx].time_ == 0)
+  {
+    timestate->time_ = -1; // hm: add to make sure -1 logic condition holds for all failure cases
     return false; // // early abort // //  not enough predictions made yet to apply measurement (too far in past)
+  }
 
   propPToIdx(idx); // catch up with covariance propagation if necessary
 
@@ -614,7 +623,7 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
   // propagate state matrix until now
   while (idx_state_ != idx_time_)
     propagateState(StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_);
-
+ 
   checkForNumeric(&correction_[0], HLI_EKF_STATE_SIZE, "update");
 
   // publish correction for external propagation
@@ -626,6 +635,8 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
   msgCorrect_.linear_acceleration.x = 0;
   msgCorrect_.linear_acceleration.y = 0;
   msgCorrect_.linear_acceleration.z = 0;
+
+  //hm: hl_state_buf_ is not used!
 
   const unsigned char idx = (unsigned char)(idx_state_ - 1);
   msgCorrect_.state[0] = StateBuffer_[idx].p_[0] - hl_state_buf_.state[0];
@@ -649,8 +660,8 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
   msgCorrect_.state[14] = StateBuffer_[idx].b_a_[1] - hl_state_buf_.state[14];
   msgCorrect_.state[15] = StateBuffer_[idx].b_a_[2] - hl_state_buf_.state[15];
 
-  msgCorrect_.flag = sensor_fusion_comm::ExtEkf::state_correction;
-  pubCorrect_.publish(msgCorrect_);
+//  msgCorrect_.flag = sensor_fusion_comm::ExtEkf::state_correction;
+//  pubCorrect_.publish(msgCorrect_);
 
   // publish state
   msgState_.header = msgCorrect_.header;
@@ -663,12 +674,14 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 
 void SSF_Core::Config(ssf_core::SSF_CoreConfig& config, uint32_t level)
 {
+  ROS_INFO_STREAM("Config(): dynamic reconfigure detected, level=" << level);
   for (std::vector<CallbackType>::iterator it = callbacks_.begin(); it != callbacks_.end(); it++)
     (*it)(config, level);
 }
 
 void SSF_Core::DynConfig(ssf_core::SSF_CoreConfig& config, uint32_t level)
 {
+  ROS_INFO_STREAM("DynConfig(): config_ updated!"<< std::endl);
   config_ = config;
 }
 

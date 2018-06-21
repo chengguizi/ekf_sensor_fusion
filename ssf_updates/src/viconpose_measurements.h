@@ -29,19 +29,19 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
 
-#ifndef POSE_MEASUREMENTS_H
-#define POSE_MEASUREMENTS_H
+#ifndef VICONPOSE_MEASUREMENTS_H
+#define VICONPOSE_MEASUREMENTS_H
 
 #include <ros/ros.h>
 #include <ssf_core/measurement.h>
-#include "pose_sensor.h"
+#include "viconpose_sensor.h"
 
-class PoseMeasurements : public ssf_core::Measurements
+class ViconPoseMeasurements : public ssf_core::Measurements
 {
 public:
-  PoseMeasurements()
+  ViconPoseMeasurements()
   {
-    addHandler(new PoseSensorHandler(this));
+    addHandler(new ViconPoseSensorHandler(this));
 
     ros::NodeHandle pnh("~");
     pnh.param("init/p_ci/x", p_ci_[0], 0.0);
@@ -59,13 +59,13 @@ public:
     pnh.param("init/q_wv/y", q_wv_.y(), 0.0);
     pnh.param("init/q_wv/z", q_wv_.z(), 0.0);
     q_wv_.normalize();
+  
   }
 
 private:
-
   Eigen::Matrix<double, 3, 1> p_ci_; ///< initial distance camera-IMU
-  Eigen::Quaternion<double> q_ci_; ///< initial rotation camera-IMU
-  Eigen::Quaternion<double> q_wv_; ///< initial rotation wolrd-vision
+  Eigen::Quaternion<double> q_ci_;   ///< initial rotation camera-IMU
+  Eigen::Quaternion<double> q_wv_;   ///< initial rotation wolrd-vision
 
   void init(double scale)
   {
@@ -73,17 +73,20 @@ private:
     Eigen::Quaternion<double> q;
     ssf_core::SSF_Core::ErrorStateCov P;
 
-	// init values
-	g << 0, 0, 9.81;	/// gravity
-	b_w << 0,0,0;		/// bias gyroscopes
-	b_a << 0,0,0;		/// bias accelerometer
+    // init values
+    g << 0, 0, 9.81; /// gravity
+    b_w << 0, 0, 0;  /// bias gyroscopes
+    b_a << 0, 0, 0;  /// bias accelerometer
 
-	v << 0,0,0;			/// robot velocity (IMU centered)
-	w_m << 0,0,0;		/// initial angular velocity
-	a_m =g;				/// initial acceleration
+    v << 0, 0, 0;   /// robot velocity (IMU centered)
+    w_m << 0, 0, 0; /// initial angular velocity
+    a_m = g;        /// initial acceleration
 
     P.setZero(); // error state covariance; if zero, a default initialization in ssf_core is used
 
+    ROS_INFO_STREAM("q_cv: (w,x,y,z): [" << q_cv_.w() << ", " << q_cv_.x() << ", " << q_cv_.y() << ", " << q_cv_.z() << "]" << std::endl);
+    ROS_INFO_STREAM("q_wv: (w,x,y,z): [" << q_wv_.w() << ", " << q_wv_.x() << ", " << q_wv_.y() << ", " << q_wv_.z()  << "]"<< std::endl);
+    
     // check if we have already input from the measurement sensor
     if (p_vc_.norm() == 0)
       ROS_WARN_STREAM("No measurements received yet to initialize position - using [0 0 0]");
@@ -92,19 +95,25 @@ private:
 
     // calculate initial attitude and position based on sensor measurements
     q = (q_ci_ * q_cv_.conjugate() * q_wv_).conjugate();
+    ROS_INFO_STREAM("q: (w,x,y,z): [" << q.w() << ", " << q.x() << ", " << q.y() << ", " << q.z()  << "]"<< std::endl);
+    ROS_INFO_STREAM("q_ci: (w,x,y,z): [" << q_ci_.w() << ", " << q_ci_.x() << ", " << q_ci_.y() << ", " << q_ci_.z()  << "]"<< std::endl);
+    
+
     q.normalize();
+    ROS_INFO_STREAM("q_normalized: (w,x,y,z): [" << q.w() << ", " << q.x() << ", " << q.y() << ", " << q.z()  << "]"<< std::endl);
+    
     p = q_wv_.conjugate().toRotationMatrix() * p_vc_ / scale - q.toRotationMatrix() * p_ci_;
 
     // call initialization in core
     ssf_core_.initialize(p, v, q, b_w, b_a, scale, q_wv_, P, w_m, a_m, m_m, g, q_ci_, p_ci_);
 
-    ROS_INFO_STREAM("filter initialized to: \n" <<
-        "position: [" << p[0] << ", " << p[1] << ", " << p[2] << "]" << std::endl <<
-        "scale:" << scale << std::endl <<
-        "attitude (w,x,y,z): [" << q.w() << ", " << q.x() << ", " << q.y() << ", " << q.z() << std::endl <<
-        "p_ci: [" << p_ci_[0] << ", " << p_ci_[1] << ", " << p_ci_[2] << std::endl <<
-        "q_ci: (w,x,y,z): [" << q_ci_.w() << ", " << q_ci_.x() << ", " << q_ci_.y() << ", " << q_ci_.z() << "]");
+    ROS_INFO_STREAM("filter initialized to: \n"
+                    << "position: [" << p[0] << ", " << p[1] << ", " << p[2] << "]" << std::endl
+                    << "scale:" << scale << std::endl
+                    << "attitude (w,x,y,z): [" << q.w() << ", " << q.x() << ", " << q.y() << ", " << q.z() << std::endl
+                    << "p_ci: [" << p_ci_[0] << ", " << p_ci_[1] << ", " << p_ci_[2] << std::endl
+                    << "q_ci: (w,x,y,z): [" << q_ci_.w() << ", " << q_ci_.x() << ", " << q_ci_.y() << ", " << q_ci_.z() << "]");
   }
 };
 
-#endif /* POSE_MEASUREMENTS_H */
+#endif /* VICONPOSE_MEASUREMENTS_H */
