@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(ssf_core)
 
-find_package(catkin REQUIRED COMPONENTS roscpp rospy sensor_msgs dynamic_reconfigure cmake_modules sensor_fusion_comm std_msgs message_generation)
+# enable C++11 standard (current directory scope)
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+find_package(catkin REQUIRED COMPONENTS roscpp rospy sensor_msgs dynamic_reconfigure cmake_modules sensor_fusion_comm std_msgs message_generation tf2 tf2_ros)
 
 # Set the build type.  Options are:
 #  Coverage       : w/ debug symbols, w/o optimization, w/ code-coverage
@@ -33,7 +37,7 @@ generate_dynamic_reconfigure_options(cfg/SSF_Core.cfg)
 
 catkin_package(
     DEPENDS
-    CATKIN_DEPENDS roscpp sensor_msgs dynamic_reconfigure sensor_fusion_comm message_runtime
+    CATKIN_DEPENDS roscpp sensor_msgs dynamic_reconfigure sensor_fusion_comm message_runtime tf2 tf2_ros
     INCLUDE_DIRS include ${EIGEN3_INCLUDE_DIRS}
     LIBRARIES ssf_core
 )

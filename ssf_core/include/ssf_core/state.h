@@ -39,6 +39,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <sensor_fusion_comm/ExtState.h>
 #include <sensor_fusion_comm/DoubleArrayStamped.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
+#include <geometry_msgs/TransformStamped.h>
+
+#include <iostream>
 
 #define N_STATE 25 /// error state size
 
@@ -71,10 +74,14 @@ public:
   Eigen::Matrix<double,3,1> m_m_;         ///< magnetometer readings 
 
   Eigen::Quaternion<double> q_int_;       ///< this is the integrated ang. vel. no corrections applied, to use for delta rot in external algos...
+  Eigen::Matrix<double, 3, 1> p_int_;     ///< integrated position
 
   Eigen::Matrix<double, N_STATE, N_STATE> P_;///< error state covariance
 
+  State();
+
   double time_; ///< time of this state estimate
+  int seq_; ///HM: < sequence of measurement message
 
   /// resets the state
   /**
@@ -97,9 +104,30 @@ public:
   /** it does not set the header */
   void toStateMsg(sensor_fusion_comm::DoubleArrayStamped & state);
 
+  void toTransformMsg(geometry_msgs::TransformStamped& tf_stamped, 
+        const Eigen::Matrix<double, 3, 1> translation, const Eigen::Quaternion<double> rotation);
 
+  friend std::ostream& operator<<(std::ostream& os, const State& state)  
+  {  
+      os << "State:" << std::endl;
+      os << "p: " << std::endl << state.p_ << std::endl;
+      os << "v: " << std::endl << state.v_ << std::endl;
+      os << "q: " << std::endl << state.q_.w() << ", " << std::endl << state.q_.vec() << std::endl;
+      os << "b_w_: " << std::endl << state.b_w_ << std::endl;
+      os << "b_a_: " << std::endl << state.b_a_ << std::endl;
+      os << "L_: " << std::endl << state.L_ << std::endl;
+      os << "q_wv_: " << std::endl << state.q_wv_.w() << ", " << std::endl << state.q_wv_.vec() << std::endl;
+      os << "q_ci_: " << std::endl << state.q_ci_.w() << ", " << std::endl << state.q_ci_.vec() << std::endl;
+      os << "w_m_: " << std::endl << state.w_m_ << std::endl;
+      os << "a_m_: " << std::endl << state.a_m_ << std::endl; 
+      os << "m_m_: " << std::endl << state.m_m_ << std::endl;
+
+      return os;  
+  }  
 
 };
+
+
 
 }
 

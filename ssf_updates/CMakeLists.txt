@@ -2,7 +2,11 @@ cmake_minimum_required(VERSION 2.8.3)
 project(ssf_updates)
 
 find_package(catkin REQUIRED COMPONENTS roscpp ssf_core geometry_msgs message_generation)
-set (CMAKE_CXX_STANDARD 11)
+find_package (Eigen3 REQUIRED)
+
+# enable C++11 standard (current directory scope)
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Set the build type.  Options are:
 #  Coverage       : w/ debug symbols, w/o optimization, w/ code-coverage
@@ -19,7 +23,7 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
 add_definitions (-Wall -O3)
 
-include_directories(include ${catkin_INCLUDE_DIRS})
+include_directories(include ${catkin_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIRS})
 
 add_message_files(FILES PositionWithCovarianceStamped.msg)
 
