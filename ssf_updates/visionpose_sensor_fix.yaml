@@ -1,6 +1,7 @@
 scale_init: 1
-fixed_scale: 1
-fixed_bias: 0
+fixed_scale: false
+fixed_bias: false
+fixed_calib: false
 
 # for visensor imu
 # noise_acc: 0.01
@@ -8,28 +9,28 @@ fixed_bias: 0
 # noise_gyr: 0.005
 # noise_gyrbias: 4.0e-06
 
-noise_acc: 0.01
-noise_accbias: 0.0002
-noise_gyr: 0.005
-noise_gyrbias: 4.0e-06
+noise_acc: 0.083
+noise_accbias: 0.0083
+noise_gyr: 0.0013
+noise_gyrbias: 0.00013
 
 noise_scale: 0.0
 noise_qwv: 0.0
-noise_qci: 0.0
-noise_pic: 0.0
+noise_qci: 0.0001
+noise_pic: 0.0001
 delay: 0.02
 
 # for visensor measurement
-meas_noise1: 0.1
-meas_noise2: 0.17
+# meas_noise1: 0.1
+# meas_noise2: 0.17
 
-data_playback: true
+#data_playback: true
 
 # initialization of camera w.r.t. IMU
-init/q_ci/w: 0.9999888
-init/q_ci/x: -0.0038557
-init/q_ci/y: 0.0005979
-init/q_ci/z: 0.0026918
+init/q_ci/w: 0
+init/q_ci/x: 0
+init/q_ci/y: 0
+init/q_ci/z: 1
 
 init/p_ci/x: -0.07803115  
 init/p_ci/y: -0.00911038
@@ -41,5 +42,5 @@ init/q_wv/x: 0.0
 init/q_wv/y: 0.0
 init/q_wv/z: 0.0
 
-use_fixed_covariance: true
+use_fixed_covariance: false
 measurement_world_sensor: true  # selects if sensor measures its position w.r.t. world (true, e.g. Vicon) or the position of the world coordinate system w.r.t. the sensor (false, e.g. ethzasl_ptam)
