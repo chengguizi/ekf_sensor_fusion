@@ -33,7 +33,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define VISIONPOSE_SENSOR_H
 
 #include <ssf_core/measurement.h>
-#include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
 
 class VisionPoseSensorHandler : public ssf_core::MeasurementHandler
 {
@@ -49,11 +49,17 @@ private:
 
   bool measurement_world_sensor_; ///< defines if the pose of the sensor is measured in world coordinates (true, default) or vice versa (false, e.g. PTAM)
   bool use_fixed_covariance_; ///< use fixed covariance set by dynamic reconfigure
-  bool has_measurement;
+
+  ros::Time lastMeasurementTime_;
+  // bool has_measurement;
 
   void subscribe();
-  void measurementCallback(const geometry_msgs::PoseStampedConstPtr & poseMsg);
+  void measurementCallback(const geometry_msgs::PoseWithCovarianceStampedConstPtr poseMsg);
   void noiseConfig(ssf_core::SSF_CoreConfig& config, uint32_t level);
+
+  void initMeasurement(){
+      lastMeasurementTime_ =  ros::Time(0);
+  }
 
 public:
   VisionPoseSensorHandler();

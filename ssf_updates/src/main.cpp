@@ -42,9 +42,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "visionpose_measurements.h"
 #endif
 
+#include <std_srvs/Empty.h>
+
 int main(int argc, char** argv)
 {
 	ros::init(argc, argv, "ssf_core");
+	ros::NodeHandle nh("~");
+
 #ifdef POSE_MEAS
 	PoseMeasurements PoseMeas;
 	ROS_INFO_STREAM("Filter type: pose_sensor");
@@ -61,10 +65,10 @@ int main(int argc, char** argv)
 #endif
 
 #ifdef VISIONPOSE_MEAS
+		// STEP 0
         VisionPoseMeasurements VisionPoseMeas;
         ROS_INFO_STREAM("Filter type: visionpose_sensor");
 #endif
-
 
 	//  print published/subscribed topics
 	ros::V_string topics;
@@ -81,6 +85,50 @@ int main(int argc, char** argv)
 
 	ROS_INFO_STREAM(""<< topicsStr);
 
+	// STEP 1, Wait for IMU input to be available, stabilised
+	struct ssf_core::ImuInputsCache imuEstimateMean;
+	VisionPoseMeas.initialiseIMU(imuEstimateMean);
+
+	// STEP 2, Initialise State Zero with State at origin and fake IMU Input
+	VisionPoseMeas.initStateZero(imuEstimateMean);
+
+	
+
+	// STEP 3, Wait for VO node to have incoming images and publishing pose topic
+	std::string vo_topic_str = "/stereo_odometer/pose";
+	while (ros::ok())
+	{
+		ROS_INFO_STREAM("Waiting for messages from topic " << vo_topic_str);
+		auto ptr = ros::topic::waitForMessage<geometry_msgs::PoseWithCovarianceStamped>( vo_topic_str, ros::Duration(0.5) );
+
+		if (!ptr)
+			ROS_ERROR_THROTTLE(2,"No messages from the topic, check the VO node availability.");
+		else
+		{
+			ROS_INFO("VO messages are detected, triggering EKF initialisation...");
+			break;
+		}
+		ros::spinOnce();
+	}
+
+	// STEP 4, Broadcast Initial calibration
+	// VisionPoseMeas.boardcastInitialCalibration();
+	// ros::spinOnce();
+
+	// STEP 5, set global start (which checks if IMU inputs has arrived), trigger VO node on global start as well
+	ros::Time global_start = VisionPoseMeas.setGlobalStart();
+	ROS_INFO("==========Enable IMU Callback for Prediction EKF==============");
+	ROS_INFO_STREAM("==============Global Start Time: " << std::fixed <<  global_start <<"==============");
+	// Reset VO integration to identity, therefore enable Measurement Callback
+	ros::ServiceClient vo_client = nh.serviceClient<std_srvs::Empty>("/stereo_odometer/reset_pose");
+	std_srvs::Empty srv;
+	if (!vo_client.call(srv))
+	{
+		ROS_ERROR("Fail to call stereo_odometer/reset_pose");
+	}
+	ROS_WARN_STREAM("Done resetting VO integration, time: " << ros::Time::now());
+
+	ROS_INFO("main(): initialisation done, ROS spinning");
 	ros::spin();
 
 	return 0;

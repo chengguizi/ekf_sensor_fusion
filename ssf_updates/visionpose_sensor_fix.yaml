@@ -27,10 +27,10 @@ delay: 0.02
 #data_playback: true
 
 # initialization of camera w.r.t. IMU
-init/q_ci/w: 0
+init/q_ci/w: 1
 init/q_ci/x: 0
 init/q_ci/y: 0
-init/q_ci/z: 1
+init/q_ci/z: 0
 
 init/p_ci/x: -0.07803115  
 init/p_ci/y: -0.00911038
