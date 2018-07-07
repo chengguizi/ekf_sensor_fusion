@@ -1,7 +1,8 @@
 <launch>
-    <node name="visionpose_sensor" pkg="ssf_updates" type="visionpose_sensor" clear_params="true" output="screen">
-			 <remap from="ssf_core/imu_state_input" to="/imu0" />
-         	<remap from="ssf_core/visionpose_measurement" to="/stereo_odometer/pose_iw_" />
+    <node pkg="ssf_updates" type="visionpose_sensor" name="ekf_odometer"   clear_params="true" output="screen">
+			<remap from="ekf_odometer/imu_state_input" to="/imu/imu0" />
+			<remap from="ekf_odometer/mag_state_input" to="/imu/mag0" />
+         	<remap from="ekf_odometer/visionpose_measurement" to="/stereo_odometer/pose_iw_" />
 
 	    	<rosparam file="$(find ssf_updates)/visionpose_sensor_fix.yaml"/>
     </node>

@@ -46,7 +46,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 int main(int argc, char** argv)
 {
-	ros::init(argc, argv, "ssf_core");
+	ros::init(argc, argv, "ekf_odometer");
 	ros::NodeHandle nh("~");
 
 #ifdef POSE_MEAS

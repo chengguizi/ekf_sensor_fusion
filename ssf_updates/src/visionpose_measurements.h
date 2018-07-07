@@ -110,6 +110,7 @@ public:
 		if (imuEstimateMean.a_m_.norm() > 11 || imuEstimateMean.a_m_.norm() < 8)
 		{
 			ROS_WARN_STREAM("The gravity readings might be out of range: " << imuEstimateMean.a_m_.norm() );
+			exit(1);
 		}
 		
 		//// IMPORTANT: gravity direction is straight upwards!
@@ -124,14 +125,24 @@ public:
 		Eigen::Hyperplane<double,3> horizontal_plane = Eigen::Hyperplane<double,3>(normalvec_down, Eigen::VectorXd::Zero(3));
 
 		// Calculation projection of magnetic field onto the horizontal plane
-		Eigen::Vector3d normalvec_north = horizontal_plane.projection(normalvec_m).normalized();
+		Eigen::Vector3d normalvec_north = horizontal_plane.projection(normalvec_m);
 
+		if (normalvec_north.norm() / normalvec_m.norm() < 0.5 )
+		{
+			ROS_WARN_STREAM("Magnetic North is too small in the horizontal plane: " << normalvec_north.norm() / normalvec_m.norm());
+			exit(1);
+		}
+		normalvec_north.normalize();
 		//std::cout << "horizontal_plane= " << horizontal_plane.coeffs() << std::endl;
 
 		Eigen::Vector3d normalvec_east = normalvec_down.cross(normalvec_north).normalized();
 
 		Eigen::Matrix3d R_wi,R_iw; 
-		// rotation matrix R_wi represents the world frame (NED) coordinate in IMU-Frame 
+		// rotation matrix R_wi represents the world frame (NED) coordinate in IMU-Frame
+		std::cout << "normalvec_north: " << normalvec_north.transpose() << std::endl;
+		std::cout << "normalvec_east: " << normalvec_east.transpose() << std::endl;
+		std::cout << "normalvec_down: " << normalvec_down.transpose() << std::endl;
+
 		R_wi << normalvec_north, normalvec_east, normalvec_down;
 		R_iw = R_wi.transpose();
 		std::cout << "R_iw = " << std::endl << R_iw << std::endl;
@@ -238,7 +249,7 @@ public:
 				std::cout << "\tvar.w_m_" << max_result.var.w_m_.transpose();
 				std::cout << std::endl;
 
-				if (max_result.var.a_m_.norm() < 0.25 && max_result.var.w_m_.norm() < 0.01 ) // variance smaller than 0.5 m/s^2
+				if (max_result.var.a_m_.norm() < 0.05 && max_result.var.w_m_.norm() < 0.001 ) // variance smaller than 0.05 m/s^2
 				{
 					// CHECK FOR GRAVITY ESTIMATE
 
@@ -299,7 +310,7 @@ private:
 
 	void init()
 	{
-		std::cout << "q_iw_ = " << std::endl << q_iw_.coeffs() << std::endl;
+		std::cout << "q_iw_ = " << std::endl << q_iw_.coeffs() << std::endl; // x,y,z,w
 		if (q_iw_.norm() == 0) // eigen library convention(x,y,z,w)
 		{
 			ROS_ERROR("q_iw_ is not initialised / estimated properly.");

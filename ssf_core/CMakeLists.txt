@@ -5,7 +5,19 @@ project(ssf_core)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(catkin REQUIRED COMPONENTS roscpp rospy sensor_msgs dynamic_reconfigure cmake_modules sensor_fusion_comm std_msgs message_generation tf2 tf2_ros)
+find_package(catkin REQUIRED COMPONENTS 
+roscpp 
+rospy 
+sensor_msgs 
+dynamic_reconfigure 
+cmake_modules 
+sensor_fusion_comm 
+std_msgs 
+message_generation 
+tf2 
+tf2_ros
+message_filters
+)
 
 # Set the build type.  Options are:
 #  Coverage       : w/ debug symbols, w/o optimization, w/ code-coverage

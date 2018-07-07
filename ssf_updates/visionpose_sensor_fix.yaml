@@ -9,10 +9,10 @@ fixed_calib: false
 # noise_gyr: 0.005
 # noise_gyrbias: 4.0e-06
 
-noise_acc: 0.083
-noise_accbias: 0.0083
-noise_gyr: 0.0013
-noise_gyrbias: 0.00013
+noise_acc: 0.01
+noise_accbias: 0.0002
+noise_gyr: 0.005
+noise_gyrbias: 4.0e-06
 
 noise_scale: 0.0
 noise_qwv: 0.0
@@ -27,9 +27,9 @@ delay: 0.02
 #data_playback: true
 
 # initialization of camera w.r.t. IMU
-init/q_ci/w: 1
+init/q_ci/w: 0
 init/q_ci/x: 0
-init/q_ci/y: 0
+init/q_ci/y: 1 # y points to the ground, x points to the left, z points back
 init/q_ci/z: 0
 
 init/p_ci/x: -0.07803115  

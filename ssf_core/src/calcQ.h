@@ -73,7 +73,7 @@ template <class Derived, class DerivedQ> void calc_Q(
 	double t351 = q2*q2;
 	double t352 = q3*q3;
 	double t353 = q4*q4;
-	double t346 = t350+t351-t352-t353;
+	double t346 = t350+t351-t352-t353; // q1^2 + q2^2 - q3^2 - q4^2
 	double t347 = n_a1*n_a1;
 	double t354 = n_a2*n_a2;
 	double t355 = n_a3*n_a3;
@@ -383,7 +383,7 @@ template <class Derived, class DerivedQ> void calc_Q(
 	double t661 = t343*t344*t399*(1.0/2.0);
 	double t662 = dt*t343*t376*t400*(1.0/6.0);
 	double t663 = t343*t376*t400*(1.0/2.0);
-	Qd(0,0) = dt*t343*t347*t361*(1.0/3.0)+dt*t343*t354*t359*(1.0/3.0)+dt*t343*t355*t360*(1.0/3.0);
+	Qd(0,0) = dt*t343*t347*t361*(1.0/3.0)+dt*t343*t354*t359*(1.0/3.0)+dt*t343*t355*t360*(1.0/3.0); // 343 dt^2, 347 na1^2
 	Qd(0,1) = t375-dt*t343*t345*t355*(t358-q3*q4*2.0)*(1.0/3.0)-dt*t343*t344*t354*t367*(1.0/3.0);
 	Qd(0,2) = t402;
 	Qd(0,3) = t419;

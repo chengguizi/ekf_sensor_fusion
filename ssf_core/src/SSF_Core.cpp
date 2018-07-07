@@ -35,30 +35,31 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace ssf_core
 {
-
-SSF_Core::SSF_Core() : global_start_(0), lastImuInputsTime_(ros::Time(0)), isImuCacheReady(false)
+SSF_Core::SSF_Core() : imu_received_(0), mag_received_(0)
+	, exact_sync_(ExactPolicy(N_STATE_BUFFER),subImu_,subMag_) , global_start_(0) , lastImuInputsTime_(ros::Time(0)), isImuCacheReady(false)
 {
 	/// ros stuff
-	ros::NodeHandle nh("ssf_core");
-	ros::NodeHandle pnh("~");
+	ros::NodeHandle nh_local("~");
 
-	pubState_ = nh.advertise<sensor_fusion_comm::DoubleArrayStamped> ("state_out", 3);
+	pubState_ = nh_local.advertise<sensor_fusion_comm::DoubleArrayStamped> ("state_out", 3);
 	//pubCorrect_ = nh.advertise<sensor_fusion_comm::ExtEkf> ("correction", 1);
-	pubPose_ = nh.advertise<geometry_msgs::PoseWithCovarianceStamped> ("pose", 3);
-	pubPoseCorrected_ = nh.advertise<geometry_msgs::PoseWithCovarianceStamped> ("pose_corrected", 3);
+	pubPose_ = nh_local.advertise<geometry_msgs::PoseWithCovarianceStamped> ("pose", 3);
+	pubPoseCorrected_ = nh_local.advertise<geometry_msgs::PoseWithCovarianceStamped> ("pose_corrected", 3);
 	//pubPoseCrtl_ = nh.advertise<sensor_fusion_comm::ExtState> ("ext_state", 1);
 
 	msgState_.data.resize(nFullState_, 0);
 
-	subImu_ = nh.subscribe("imu_state_input", N_STATE_BUFFER, &SSF_Core::imuCallback, this);
-	// subState_ = nh.subscribe("hl_state_input", 1 /*N_STATE_BUFFER*/, &SSF_Core::stateCallback, this);
+	subImu_.subscribe(nh_local,"imu_state_input", N_STATE_BUFFER);
+	subMag_.subscribe(nh_local,"mag_state_input", N_STATE_BUFFER);
 
-	//msgCorrect_.state.resize(HLI_EKF_STATE_SIZE, 0);
-	//hl_state_buf_.state.resize(HLI_EKF_STATE_SIZE, 0);
+	subImu_.registerCallback(boost::bind(SSF_Core::increment, &imu_received_));
+	subMag_.registerCallback(boost::bind(SSF_Core::increment, &mag_received_));
+	check_synced_timer_ = nh_local.createWallTimer(ros::WallDuration(5.0), boost::bind(&SSF_Core::checkInputsSynchronized, this));
+
+	exact_sync_.registerCallback(boost::bind(&SSF_Core::imuCallback, this, _1, _2));
+	
 
 	qvw_inittimer_ = 1;
-
-	//pnh.param("data_playback", data_playback_, false);
 
 	//register dyn config list
 	registerCallback(&SSF_Core::DynConfig, this);
@@ -97,6 +98,7 @@ void SSF_Core::initialize(const Eigen::Matrix<double, 3, 1> & p, const Eigen::Ma
 	state.p_ = p;
 	state.v_ = v;
 	state.q_ = q;
+	initial_q_ = q;
 	state.b_w_ = b_w;
 	state.b_a_ = b_a;
 	state.L_ = L;
@@ -131,9 +133,10 @@ void SSF_Core::initialize(const Eigen::Matrix<double, 3, 1> & p, const Eigen::Ma
 	idx_P_++;
 }
 
-void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg)
+void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_msgs::MagneticFieldConstPtr & msg_mag)
 // void SSF_Core::imuCallback(const ssf_core::visensor_imuConstPtr & msg)
 {
+	all_received_++;
 	static int imuCacheIdx = 0;
 
 	struct ImuInputsCache* imuInputsCache_ptr;
@@ -142,19 +145,26 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg)
 	imuInputsCache_ptr->seq = imuCacheIdx;
 	imuInputsCache_ptr->a_m_ << msg->linear_acceleration.x, msg->linear_acceleration.y, msg->linear_acceleration.z;
 	imuInputsCache_ptr->w_m_ << msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z;
-	imuInputsCache_ptr->m_m_ << 0, 0, 0;
-	//imuInputsCache_ptr->m_m_ << msg->orientation.x, msg->orientation.y, msg->orientation.z, msg->orientation.w ;
+	imuInputsCache_ptr->m_m_ << msg_mag->magnetic_field.x, msg_mag->magnetic_field.y, msg_mag->magnetic_field.z;
 
 	if (imuCacheIdx == imuInputsCache_size - 1)
 		isImuCacheReady = true;
 
 	imuCacheIdx++;
 
-	if (imuInputsCache_ptr->a_m_.norm() > 50)
+	if (imuInputsCache_ptr->a_m_.norm() > 80)
+	{
 		ROS_ERROR_STREAM("IMU acceleration input too large: " << imuInputsCache_ptr->a_m_.norm() );
+		exit(1);
+	}
+		
 
-	if (imuInputsCache_ptr->w_m_.norm() > 50)
+	if (imuInputsCache_ptr->w_m_.norm() > 30)
+	{
 		ROS_ERROR_STREAM("IMU angular velocity input too large: " << imuInputsCache_ptr->w_m_.norm() );
+		exit(1);
+	}
+		
 
 	////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////
@@ -182,14 +192,17 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg)
 	// get inputs
 	StateBuffer_[idx_state_].a_m_ << msg->linear_acceleration.x, msg->linear_acceleration.y, msg->linear_acceleration.z;
 	StateBuffer_[idx_state_].w_m_ << msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z;
+	StateBuffer_[idx_state_].m_m_ << msg_mag->magnetic_field.x, msg_mag->magnetic_field.z, msg_mag->magnetic_field.z;
 
-	// std::cout << "imu readings :" << std::endl;
-	// std::cout << "a: " << StateBuffer_[idx_state_].a_m_ << std::endl;
-	// std::cout << "w: " << StateBuffer_[idx_state_].w_m_ << std::endl;
+	// DEBUG
+	// StateBuffer_[idx_state_].a_m_ = StateBuffer_[(unsigned char)(idx_state_ - 1)].a_m_;
+	// StateBuffer_[idx_state_].w_m_ = StateBuffer_[(unsigned char)(idx_state_ - 1)].w_m_;
+	// StateBuffer_[idx_state_].m_m_ = StateBuffer_[(unsigned char)(idx_state_ - 1)].m_m_;
+	std::cout << "imuCallback()" << std::endl;
 
 	// remove acc spikes (TODO: find a cleaner way to do this)
 	static Eigen::Matrix<double, 3, 1> last_am = Eigen::Matrix<double, 3, 1>(0, 0, 0);
-	if (StateBuffer_[idx_state_].a_m_.norm() > 50)
+	if (StateBuffer_[idx_state_].a_m_.norm() > 80)
 	{
 		ROS_ERROR_STREAM("IMU acceleration too large" << StateBuffer_[idx_state_].a_m_.norm() );
 		exit(-1);
@@ -199,7 +212,7 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg)
 		last_am = StateBuffer_[idx_state_].a_m_;
 
 	static Eigen::Matrix<double, 3, 1> last_wm = Eigen::Matrix<double, 3, 1>(0, 0, 0);
-	if (StateBuffer_[idx_state_].w_m_.norm() > 10)
+	if (StateBuffer_[idx_state_].w_m_.norm() > 30)
 	{
 		ROS_ERROR_STREAM("IMU angular velocity too large" << StateBuffer_[idx_state_].w_m_.norm() );
 		exit(-1);
@@ -215,10 +228,15 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg)
 		StateBuffer_[(unsigned char)(idx_state_ - 1)].time_ = StateBuffer_[(idx_state_)].time_;
 	}
 
-	propagateState(StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_);  
-	predictProcessCovariance(StateBuffer_[idx_P_].time_ - StateBuffer_[(unsigned char)(idx_P_ - 1)].time_);
-	// HM : from here, both idx_state_ and idx_P_ INCREMENT!
+	propagateState(StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_); 
+	// StateBuffer_[idx_state_] = StateBuffer_[(unsigned char)(idx_state_ - 1)];
+	// idx_state_++;
 
+	predictProcessCovariance(StateBuffer_[idx_P_].time_ - StateBuffer_[(unsigned char)(idx_P_ - 1)].time_);
+	// StateBuffer_[idx_P_].P_ = StateBuffer_[(unsigned char)(idx_P_ - 1)].P_;
+	// idx_P_++;
+	// HM : from here, both idx_state_ and idx_P_ INCREMENT!
+	
 	checkForNumeric((double*)(&StateBuffer_[(unsigned char)(idx_state_ - 1)].p_[0]), 3, "prediction p");
 
 	//predictionMade_ = true;
@@ -226,101 +244,25 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg)
 	msgPose_.header.stamp = msg->header.stamp;
 	msgPose_.header.seq = msg->header.seq;
 
-	StateBuffer_[(unsigned char)(idx_state_ - 1)].toPoseMsg(msgPose_);
+	State &updated_state = StateBuffer_[(unsigned char)(idx_state_ - 1)];
+
+	updated_state.toPoseMsg(msgPose_);
 	pubPose_.publish(msgPose_);
 
 	// publish transforms to help initialising VO
 	broadcast_ci_transformation((unsigned char)(idx_state_ - 1),msgPose_.header.stamp);
 	broadcast_iw_transformation((unsigned char)(idx_state_ - 1),msgPose_.header.stamp);
 
+	std::cout << updated_state << std::endl;
+
+	double theta_dev = 180.0/M_PI*std::acos( 2 * std::pow(initial_q_.coeffs().dot(updated_state.q_.coeffs()),2.0) - 1 );
+	std::cout << "theta_dev (deg): " << theta_dev << std::endl;
+	std::cout << "P diagonal(): " << std::endl << updated_state.P_.diagonal().transpose() << std::endl;
+
 	// msgPoseCtrl_.header = msgPose_.header;
 	// StateBuffer_[(unsigned char)(idx_state_ - 1)].toExtStateMsg(msgPoseCtrl_);
 	//pubPoseCrtl_.publish(msgPoseCtrl_);
 }
-
-
-// void SSF_Core::stateCallback(const sensor_fusion_comm::ExtEkfConstPtr & msg)
-// {
-	// ROS_WARN("in stateCallback()");
-	// if (global_start_.isZero())
-	// 	return; // // early abort // //
-
-	// StateBuffer_[idx_state_].time_ = msg->header.stamp.toSec();
-
-	// static int seq = 0;
-
-	// // get inputs
-	// StateBuffer_[idx_state_].a_m_ << msg->linear_acceleration.x, msg->linear_acceleration.y, msg->linear_acceleration.z;
-	// StateBuffer_[idx_state_].w_m_ << msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z;
-
-	// // remove acc spikes (TODO: find a cleaner way to do this)
-	// static Eigen::Matrix<double, 3, 1> last_am = Eigen::Matrix<double, 3, 1>(0, 0, 0);
-	// if (StateBuffer_[idx_state_].a_m_.norm() > 50)
-	// 	StateBuffer_[idx_state_].a_m_ = last_am;
-	// else
-	// 	last_am = StateBuffer_[idx_state_].a_m_;
-
-	// if (!predictionMade_)
-	// {
-	// 	if (fabs(StateBuffer_[(idx_state_)].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_) > 5)
-	// 	{
-	// 		ROS_WARN_STREAM_THROTTLE(2, "large time-gap re-initializing to last state\n");
-	// 		StateBuffer_[(unsigned char)(idx_state_ - 1)].time_ = StateBuffer_[(idx_state_)].time_;
-	// 		StateBuffer_[(unsigned char)(idx_state_)].time_ = 0;
-	// 		return; // // early abort // // (if timegap too big)
-	// 	}
-	// }
-
-	// int32_t flag = msg->flag;
-	// if (data_playback_)
-	// 	flag = sensor_fusion_comm::ExtEkf::ignore_state;
-
-	// bool isnumeric = true;
-	// if (flag == sensor_fusion_comm::ExtEkf::current_state)
-	// 	isnumeric = checkForNumeric(&msg->state[0], 10, "before prediction p,v,q");
-
-	// isnumeric = checkForNumeric((double*)(&StateBuffer_[idx_state_].p_[0]), 3, "before prediction p");
-
-	// if (flag == sensor_fusion_comm::ExtEkf::current_state && isnumeric) // state propagation is made externally, so we read the actual state
-	// {
-	// 	StateBuffer_[idx_state_].p_ = Eigen::Matrix<double, 3, 1>(msg->state[0], msg->state[1], msg->state[2]);
-	// 	StateBuffer_[idx_state_].v_ = Eigen::Matrix<double, 3, 1>(msg->state[3], msg->state[4], msg->state[5]);
-	// 	StateBuffer_[idx_state_].q_ = Eigen::Quaternion<double>(msg->state[6], msg->state[7], msg->state[8], msg->state[9]);
-	// 	StateBuffer_[idx_state_].q_.normalize();
-
-	// 	// zero props:
-	// 	StateBuffer_[idx_state_].b_w_ = StateBuffer_[(unsigned char)(idx_state_ - 1)].b_w_;
-	// 	StateBuffer_[idx_state_].b_a_ = StateBuffer_[(unsigned char)(idx_state_ - 1)].b_a_;
-	// 	StateBuffer_[idx_state_].L_ = StateBuffer_[(unsigned char)(idx_state_ - 1)].L_;
-	// 	StateBuffer_[idx_state_].q_wv_ = StateBuffer_[(unsigned char)(idx_state_ - 1)].q_wv_;
-	// 	StateBuffer_[idx_state_].q_ci_ = StateBuffer_[(unsigned char)(idx_state_ - 1)].q_ci_;
-	// 	StateBuffer_[idx_state_].p_ci_ = StateBuffer_[(unsigned char)(idx_state_ - 1)].p_ci_;
-	// 	idx_state_++;
-
-	// 	//hl_state_buf_ = *msg;
-	// }
-	// else if (flag == sensor_fusion_comm::ExtEkf::ignore_state || !isnumeric) // otherwise let's do the state prop. here
-	// 	propagateState(StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_);
-
-	// predictProcessCovariance(StateBuffer_[idx_P_].time_ - StateBuffer_[(unsigned char)(idx_P_ - 1)].time_);
-
-	// isnumeric = checkForNumeric((double*)(&StateBuffer_[idx_state_ - 1].p_[0]), 3, "prediction p");
-	// isnumeric = checkForNumeric((double*)(&StateBuffer_[idx_state_ - 1].P_(0)), N_STATE * N_STATE, "prediction done P");
-
-	// predictionMade_ = true;
-
-	// msgPose_.header.stamp = msg->header.stamp;
-	// msgPose_.header.seq = msg->header.seq;
-
-	// StateBuffer_[(unsigned char)(idx_state_ - 1)].toPoseMsg(msgPose_);
-	// pubPose_.publish(msgPose_);
-
-	// // msgPoseCtrl_.header = msgPose_.header;
-	// // StateBuffer_[(unsigned char)(idx_state_ - 1)].toExtStateMsg(msgPoseCtrl_);
-	// // pubPoseCrtl_.publish(msgPoseCtrl_);
-
-	// seq++;
-// }
 
 
 void SSF_Core::propagateState(const double dt)
@@ -342,14 +284,24 @@ void SSF_Core::propagateState(const double dt)
 	cur_state.p_ci_ = prev_state.p_ci_;
 
 //  Eigen::Quaternion<double> dq;
-	Eigen::Matrix<double, 3, 1> dv;
+	Eigen::Matrix<double, 3, 1> dv, dv_without_g;
 	ConstVector3 ew = cur_state.w_m_ - cur_state.b_w_;
 	ConstVector3 ewold = prev_state.w_m_ - prev_state.b_w_;
 	ConstVector3 ea = cur_state.a_m_ - cur_state.b_a_; // estimated acceleration of current state
 	ConstVector3 eaold = prev_state.a_m_ - prev_state.b_a_; // estimated acceleration of previous state
 	ConstMatrix4 Omega = omegaMatJPL(ew);
 	ConstMatrix4 OmegaOld = omegaMatJPL(ewold);
-	Matrix4 OmegaMean = omegaMatJPL((ew + ewold) / 2);
+
+	Eigen::Matrix<double, 3, 1>  ew_avg = (ew + ewold) / 2.0;
+
+	std::cout<< "ew_avg:" << ew_avg.transpose() << std::endl; 
+
+	if (ew_avg.norm() < 0.01)
+		ew_avg.setZero();
+	else if (ew_avg.norm() < 0.03)
+		ew_avg = (ew_avg.norm() - 0.01)/0.03 * ew_avg;
+
+	Matrix4 OmegaMean = omegaMatJPL(ew_avg);
 
 	// zero order quaternion integration
 	//	cur_state.q_ = (Eigen::Matrix<double,4,4>::Identity() + 0.5*Omega*dt)*StateBuffer_[(unsigned char)(idx_state_-1)].q_.coeffs();
@@ -376,12 +328,29 @@ void SSF_Core::propagateState(const double dt)
 	// first oder quaternion integration
 	cur_state.q_int_.coeffs() = quat_int * prev_state.q_int_.coeffs();
 	cur_state.q_int_.normalize();
+	
+	// DEBUG
+	// cur_state.q_ = prev_state.q_; 
 
 	// hm: this part shows that C(q_) is a passive transformation from imu to world frame
-	dv = (cur_state.q_.toRotationMatrix() * ea + prev_state.q_.toRotationMatrix() * eaold) / 2;
-	cur_state.v_ = prev_state.v_ + (dv - g_) * dt; // dv is world coordinate accerlation
-	cur_state.p_ = prev_state.p_ + ((cur_state.v_ + prev_state.v_) / 2 * dt);
-	cur_state.p_int_ = prev_state.p_int_ + ((cur_state.v_ + prev_state.v_) / 2 * dt);
+	dv = (cur_state.q_.toRotationMatrix() * ea + prev_state.q_.toRotationMatrix() * eaold) / 2.0;
+	dv_without_g = dv - g_;
+
+	// for stationary situration, reset acceleration to zero
+	// if (dv_without_g.norm() < 0.03)
+	// 	dv_without_g.setZero();
+	// else if (dv_without_g.norm() < 0.1)
+	// 	dv_without_g = (dv_without_g.norm() - 0.03)/0.1*dv_without_g;
+
+	std::cout << "dv-g based on current: " << (cur_state.q_.toRotationMatrix() * ea  - g_).transpose() << std::endl;
+	std::cout << "dv-g based on avg (with zero correction): " << dv_without_g.transpose() << std::endl;
+	std::cout << "v change:" << (dv_without_g * dt).transpose() << std::endl;
+
+	cur_state.v_ = prev_state.v_ + dv_without_g * dt; // dv is world coordinate accerlation
+	cur_state.p_ = prev_state.p_ + ((cur_state.v_ + prev_state.v_) / 2.0 * dt);
+	cur_state.p_int_ = prev_state.p_int_ + ((cur_state.v_ + prev_state.v_) / 2.0 * dt);
+
+	
 	idx_state_++;  // hm: unsigned char, so will automatically become a ring buffer
 }
 
@@ -404,15 +373,25 @@ void SSF_Core::predictProcessCovariance(const double dt)
 	ConstVector3 nqciv = Eigen::Vector3d::Constant(config_.noise_qci);
 	ConstVector3 npicv = Eigen::Vector3d::Constant(config_.noise_pic);
 
-	// bias corrected IMU readings
-	ConstVector3 ew = StateBuffer_[idx_P_].w_m_ - StateBuffer_[idx_P_].b_w_;  // ew: expectation of w, no bias
-	ConstVector3 ea = StateBuffer_[idx_P_].a_m_ - StateBuffer_[idx_P_].b_a_;
+	State & cur_state = StateBuffer_[idx_P_];
+	State & prev_state = StateBuffer_[(unsigned char)(idx_P_ - 1)];
 
-	ConstMatrix3 a_sk = skew(ea);
-	ConstMatrix3 w_sk = skew(ew);
+	// bias corrected IMU readings
+	ConstVector3 ew = cur_state.w_m_ - cur_state.b_w_;  // ew: expectation of w, no bias
+	ConstVector3 ewold = prev_state.w_m_ - prev_state.b_w_;
+	ConstVector3 ew_avg = (ew + ewold) / 2.0;
+
+
+	ConstVector3 ea = cur_state.a_m_ - cur_state.b_a_; // hm: why not minus away the gravity?
+	ConstVector3 eaold = prev_state.a_m_ - prev_state.b_a_; // estimated acceleration of previous state
+	ConstVector3 ea_avg = (cur_state.q_.toRotationMatrix() * ea + prev_state.q_.toRotationMatrix() * eaold) / 2.0;
+	// HM: FIXED SMALL Z VARIANCE ISSUE
+	ConstMatrix3 a_sk = skew(ea_avg - g_); //skew(ea); 
+	ConstMatrix3 w_sk = skew(ew_avg); // skew(ew);
 	ConstMatrix3 eye3 = Eigen::Matrix<double, 3, 3>::Identity();
 
-	ConstMatrix3 C_eq = StateBuffer_[idx_P_].q_.toRotationMatrix();
+	//ConstMatrix3 C_eq = StateBuffer_[idx_P_].q_.toRotationMatrix();
+	ConstMatrix3 C_eq = (cur_state.q_.toRotationMatrix() + prev_state.q_.toRotationMatrix()) / 2.0;
 
 	const double dt_p2_2 = dt * dt * 0.5; // dt^2 / 2
 	const double dt_p3_6 = dt_p2_2 * dt / 3.0; // dt^3 / 6
@@ -426,6 +405,20 @@ void SSF_Core::predictProcessCovariance(const double dt)
 	ConstMatrix3 E = eye3 - dt * w_sk + dt_p2_2 * w_sk * w_sk;
 	ConstMatrix3 F = -dt * eye3 + dt_p2_2 * w_sk - dt_p3_6 * (w_sk * w_sk);
 	ConstMatrix3 C = Ca3 * F;
+
+	// std::cout << "C_eq: " << std::endl << C_eq  << std::endl;
+	// std::cout << "a_sk: " << std::endl <<  a_sk << std::endl;
+	// std::cout << "Ca3: " << std::endl << C_eq * a_sk << std::endl;
+	// std::cout << "A: " << std::endl << A << std::endl;
+	// std::cout << "B: " << std::endl << B << std::endl;
+	// std::cout << "D: " << std::endl << D << std::endl;
+	// std::cout << "E: " << std::endl << E << std::endl;
+	// std::cout << "F: " << std::endl << F << std::endl;
+	// std::cout << "C: " << std::endl << C << std::endl;
+	// std::cout << "dt * eye3: " << std::endl << dt * eye3 << std::endl;
+	// std::cout << "-C_eq * dt_p2_2: " << std::endl << -C_eq * dt_p2_2 << std::endl;
+	// std::cout << "-C_eq * dt: " << std::endl << -C_eq * dt << std::endl;
+
 
 	// discrete error state propagation Matrix Fd according to:
 	// Stephan Weiss and Roland Siegwart.

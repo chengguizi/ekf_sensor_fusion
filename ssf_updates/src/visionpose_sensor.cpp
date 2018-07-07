@@ -67,7 +67,7 @@ VisionPoseSensorHandler::VisionPoseSensorHandler(ssf_core::Measurements* meas) :
 void VisionPoseSensorHandler::subscribe()
 {
 	// has_measurement = false;
-	ros::NodeHandle nh("ssf_core");
+	ros::NodeHandle nh("~");
 	subMeasurement_ = nh.subscribe("visionpose_measurement", 1, &VisionPoseSensorHandler::measurementCallback, this);
 
 	measurements->ssf_core_.registerCallback(&VisionPoseSensorHandler::noiseConfig, this);
@@ -214,8 +214,8 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	// hm: for quaternion, internal storage is [x,y,z,w]; conjugate reverse xyz signs, reversing the rotation effectively
 	// by conjugating, the rotation matrix is effectively transposed
 	//Eigen::Matrix<double, 3, 3> C_wv = state_old.q_wv_.conjugate().toRotationMatrix(); // hm: C_q{vw}, rotation from world-frame to vision frame
-	Eigen::Matrix<double, 3, 3> C_q = state_old.q_.conjugate().toRotationMatrix(); // hm: C_q{wi}, rotation from inertial-fram to world-frame
-	Eigen::Matrix<double, 3, 3> C_ci = state_old.q_ci_.conjugate().toRotationMatrix(); // hm: C_q{ic}, rotation from camera-frame to inertial-frame
+	// Eigen::Matrix<double, 3, 3> C_q = state_old.q_.conjugate().toRotationMatrix(); // hm: C_q{wi}, rotation from inertial-fram to world-frame
+	// Eigen::Matrix<double, 3, 3> C_ci = state_old.q_ci_.conjugate().toRotationMatrix(); // hm: C_q{ic}, rotation from camera-frame to inertial-frame
 
 
 #ifdef DEBUG_ON
@@ -231,7 +231,7 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	//vecold = (state_old.p_ + C_q.transpose() * state_old.p_ci_) * state_old.L_;
 	//Eigen::Matrix<double, 3, 3> skewold = skew(vecold);
 
-	Eigen::Matrix<double, 3, 3> pci_sk = skew(state_old.p_ci_);
+	// Eigen::Matrix<double, 3, 3> pci_sk = skew(state_old.p_ci_);
 
 	// construct H matrix using H-blockx :-)
 	H_old.setZero();

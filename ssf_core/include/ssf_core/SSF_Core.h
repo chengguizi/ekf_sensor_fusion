@@ -39,12 +39,19 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <dynamic_reconfigure/server.h>
 #include <ssf_core/SSF_CoreConfig.h>
 
+#include <message_filters/sync_policies/approximate_time.h>
+#include <message_filters/sync_policies/exact_time.h>
+#include <message_filters/time_synchronizer.h>
+#include <message_filters/subscriber.h>
+#include <message_filters/synchronizer.h>
+
 // message includes
 #include <sensor_fusion_comm/DoubleArrayStamped.h>
 #include <sensor_fusion_comm/ExtState.h>
 #include <sensor_fusion_comm/ExtEkf.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <sensor_msgs/Imu.h>
+#include <sensor_msgs/MagneticField.h>
 #include <ssf_core/visensor_imu.h>
 
 #include <vector>
@@ -55,6 +62,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // #include <tf_conversions/tf_eigen.h>
 
 #include <iostream>
+#include <cmath>
 
 #define N_STATE_BUFFER 256	///< size of unsigned char, do not change!
 #define HLI_EKF_STATE_SIZE 16 	///< number of states exchanged with external propagation. Here: p,v,q,bw,bw=16
@@ -137,6 +145,28 @@ public:
 	~SSF_Core();
 
 private:
+	ros::WallTimer check_synced_timer_;
+	int imu_received_, mag_received_, all_received_;
+	static void increment(int* value)
+	{
+		++(*value);
+	}
+
+	message_filters::Subscriber<sensor_msgs::Imu> subImu_; ///< subscriber to IMU readings
+	message_filters::Subscriber<sensor_msgs::MagneticField> subMag_;
+	/// IMPORTANT! message_filters::Subscriber MUST COME BEFORE message_filters::TimeSynchronizer
+
+	// typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Imu, sensor_msgs::MagneticField> ApproximatePolicy;
+	// typedef message_filters::Synchronizer<ApproximatePolicy> ApproximateSync;
+	//ApproximateSync approximate_sync_;
+	typedef message_filters::sync_policies::ExactTime<sensor_msgs::Imu, sensor_msgs::MagneticField> ExactPolicy;
+	typedef message_filters::Synchronizer<ExactPolicy> ExactSync;
+	ExactSync exact_sync_;
+	
+	//message_filters::TimeSynchronizer<sensor_msgs::Imu, sensor_msgs::MagneticField> sync;
+	
+
+
 	const static int nFullState_ = 28; ///< complete state
 	const static int nBuff_ = 30; ///< buffer size for median q_vw
 	const static int nMaxCorr_ = 50; ///< number of IMU measurements buffered for time correction actions
@@ -152,6 +182,7 @@ private:
 	unsigned char idx_time_; ///< pointer to state buffer at a specific time
 
 	Eigen::Matrix<double, 3, 1> g_; ///< gravity vector
+	Eigen::Quaternion<double> initial_q_;
 
 	/// vision-world drift watch dog to determine fuzzy tracking
 	int qvw_inittimer_;
@@ -170,7 +201,7 @@ private:
 	ros::Time global_start_;
 	ros::Time lastImuInputsTime_;
 	
-	const static int imuInputsCache_size = 256;
+	const static int imuInputsCache_size = 1024;
 	struct ImuInputsCache imuInputsCache[imuInputsCache_size];
 	bool isImuCacheReady;
 
@@ -208,8 +239,8 @@ private:
 	//ros::Publisher pubCorrect_; ///< publishes corrections for external state propagation
 	//sensor_fusion_comm::ExtEkf msgCorrect_;
 
-	ros::Subscriber subState_; ///< subscriber to external state propagation
-	ros::Subscriber subImu_; ///< subscriber to IMU readings
+	//ros::Subscriber subState_; ///< subscriber to external state propagation
+
 
 	//sensor_fusion_comm::ExtEkf hl_state_buf_; ///< buffer to store external propagation data
 
@@ -238,7 +269,7 @@ private:
 	 * \sa{stateCallback}
 	 */
 	// void imuCallbackHandler(const sensor_msgs::ImuConstPtr & msg);
-	void imuCallback(const sensor_msgs::ImuConstPtr & msg);
+	void imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_msgs::MagneticFieldConstPtr & msg_mag);
 
 
 	/// external state propagation
@@ -258,6 +289,27 @@ private:
 
 	/// computes the median of a given vector
 	double getMedian(const Eigen::Matrix<double, nBuff_, 1> & data);
+
+	void checkInputsSynchronized()
+	{
+		int threshold = 3 * all_received_;
+		if (imu_received_ >= threshold || mag_received_ >= threshold ) {
+			ROS_WARN("[ssf_core] Low number of synchronized imu/magnetometer tuples received.\n"
+								"imu received:       %d (topic '%s')\n"
+								"magnetometer received:      %d (topic '%s')\n"
+								"Synchronized tuples: %d\n"
+								"Possible issues:\n"
+								"\t* stereo_image_proc is not running.\n"
+								"\t  Does `rosnode info %s` show any connections?\n"
+								"\t* The cameras are not synchronized.\n"
+								"\t  Try restarting the node with parameter _approximate_sync:=True\n"
+								"\t* The network is too slow. One or more images are dropped from each tuple.\n"
+								"\t  Try restarting the node",
+								imu_received_, subImu_.getTopic().c_str(),
+								mag_received_, subMag_.getTopic().c_str(),
+								all_received_, ros::this_node::getName().c_str());
+		}
+	}
 
 public:
 	// some header implementations
