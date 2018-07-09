@@ -210,9 +210,9 @@ if __name__ == '__main__':
     ax1.set_autoscale_on(True)
     ax1.set_autoscalez_on(True)
     
-    ax1.set_xlim(-20,20)
-    ax1.set_ylim(-20,20)
-    ax1.set_zlim(-20,20)
+    ax1.set_xlim(-10,10)
+    ax1.set_ylim(-10,10)
+    ax1.set_zlim(-10,10)
 
     lineVO, = ax1.plot([],[],[], linestyle='-',marker='o', color='g', markersize=3)
     lineEKF, = ax1.plot([],[],[], linestyle='-',marker='x', color='b', markersize=3)
@@ -228,7 +228,7 @@ if __name__ == '__main__':
     lineB_ax, = ax2.plot([],[], label='b_ax')
     lineB_ay, = ax2.plot([],[], label='b_ay')
     lineB_az, = ax2.plot([],[], label='b_az')
-    ax2.legend(handles=[lineB_ax,lineB_ay,lineB_az])
+    ax2.legend(handles=[lineB_ax,lineB_ay,lineB_az],loc=3)
 
     lines_b_a.append(lineB_ax)
     lines_b_a.append(lineB_ay)
@@ -243,7 +243,7 @@ if __name__ == '__main__':
     lineB_wx, = ax3.plot([],[], label='b_wx')
     lineB_wy, = ax3.plot([],[], label='b_wy')
     lineB_wz, = ax3.plot([],[], label='b_wz')
-    ax3.legend(handles=[lineB_wx,lineB_wy,lineB_wz])
+    ax3.legend(handles=[lineB_wx,lineB_wy,lineB_wz],loc=3)
 
     lines_b_w.append(lineB_wx)
     lines_b_w.append(lineB_wy)
@@ -260,7 +260,7 @@ if __name__ == '__main__':
     lineQ_x, = ax4.plot([],[], label='q_x')
     lineQ_y, = ax4.plot([],[], label='q_y')
     lineQ_z, = ax4.plot([],[], label='q_z')
-    ax4.legend(handles=[lineQ_x,lineQ_y,lineQ_z])
+    ax4.legend(handles=[lineQ_x,lineQ_y,lineQ_z],loc=3)
 
     lines_q.append(lineQ_x)
     lines_q.append(lineQ_y)
@@ -270,7 +270,7 @@ if __name__ == '__main__':
     lineQ_x_val, = ax5.plot([],[], label='q_x')
     lineQ_y_val, = ax5.plot([],[], label='q_y')
     lineQ_z_val, = ax5.plot([],[], label='q_z')
-    ax5.legend(handles=[lineQ_w_val,lineQ_x_val,lineQ_y_val,lineQ_z_val])
+    ax5.legend(handles=[lineQ_w_val,lineQ_x_val,lineQ_y_val,lineQ_z_val],loc=3)
 
     lines_q_val.append(lineQ_w_val)
     lines_q_val.append(lineQ_x_val)
@@ -288,7 +288,7 @@ if __name__ == '__main__':
     linesP_x, = ax6.plot([],[], label='p_x')
     linesP_y, = ax6.plot([],[], label='p_y')
     linesP_z, = ax6.plot([],[], label='p_z')
-    ax6.legend(handles=[linesP_x,linesP_y,linesP_z])
+    ax6.legend(handles=[linesP_x,linesP_y,linesP_z],loc=3)
 
     lines_p.append(linesP_x)
     lines_p.append(linesP_y)
@@ -297,7 +297,7 @@ if __name__ == '__main__':
     linesV_x, = ax7.plot([],[], label='v_x')
     linesV_y, = ax7.plot([],[], label='v_y')
     linesV_z, = ax7.plot([],[], label='v_z')
-    ax7.legend(handles=[linesV_x,linesV_y,linesV_z])
+    ax7.legend(handles=[linesV_x,linesV_y,linesV_z],loc=3)
 
     lines_v.append(linesV_x)
     lines_v.append(linesV_y)

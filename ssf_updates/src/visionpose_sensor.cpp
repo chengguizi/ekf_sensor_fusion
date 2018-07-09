@@ -89,6 +89,20 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
  void VisionPoseSensorHandler::measurementCallback(const geometry_msgs::PoseWithCovarianceStampedConstPtr poseMsg)
 {
 
+	if (poseMsg->header.stamp.isZero())
+	{
+		ROS_INFO("VO Disabled");
+		
+		unsigned char idx;
+		ssf_core::State state_now = measurements->ssf_core_.getCurrentState(idx);
+
+		ros::Time now;
+		now.fromSec(state_now.time_);
+		measurements->ssf_core_.broadcast_ci_transformation(idx,now,true);
+		measurements->ssf_core_.broadcast_iw_transformation(idx,now,true);
+		return;
+	}
+
 	if (lastMeasurementTime_.isZero())
 		ROS_INFO_STREAM("measurementCallback(): First Measuremetn Received at " << poseMsg->header.stamp);
 
@@ -151,27 +165,30 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	R(6,6) = 1e-6;
 
 	// find closest predicted state in time which fits the measurement time
-	ssf_core::State state_old;
-	unsigned char idx = measurements->ssf_core_.getClosestState(&state_old, time_old);
+	ssf_core::State* state_old_ptr = nullptr;
+	unsigned char idx = measurements->ssf_core_.getClosestState(state_old_ptr, time_old);
 	int num_state = measurements->ssf_core_.getNumberofState();
+
 	
-	if (state_old.time_ == -1)
+	
+	if (state_old_ptr == nullptr)
 	{
 		ROS_WARN_STREAM("measurement callback early abort: no past state with the timestamp found: " 
 				<< std::fixed << time_old.toSec() << std::endl);
 		ROS_WARN_STREAM("number of states: " << num_state);
 		exit(-1); // CRITICAL ERROR
 		return; // // early abort // //
-	}else{
-		auto diff = state_old.time_ - time_old.toSec();
-		std::cout << std::endl << std::endl <<
-		 _seq << "th measurement frame found state buffer that is " << diff << " seconds from measurement at index " << (int)idx << std::endl;
 	}
+
+	ssf_core::State state_old = *state_old_ptr;
+	auto diff = state_old.time_ - time_old.toSec();
+	std::cout << std::endl << std::endl <<
+		_seq << "th measurement frame found state buffer that is " << diff << " seconds from measurement at index " << (int)idx << std::endl;
 
 	ROS_INFO_STREAM( "\nz_p_ " << z_p_.transpose() << std::endl
 		<< "z_q_ " << z_q_.w() << ", " << z_q_.vec().transpose()
 	);
-	ROS_INFO_STREAM( "\nR" << std::endl << R.diagonal().transpose() );
+	ROS_WARN_STREAM( "\nR" << std::endl << R.diagonal().transpose() );
 
 	ROS_INFO_STREAM( "state_old " << state_old );
 
@@ -179,6 +196,7 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 
 	double theta_dev = 180.0/M_PI*std::acos( 2 * std::pow(z_q_.coeffs().dot(state_old.q_.coeffs()),2.0) - 1.0 );
 	ROS_WARN_STREAM( "theta_dev (deg): " << theta_dev);
+
 
 	// get rotation matrices
 
@@ -213,7 +231,7 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	{
 		//////////////////////////////////
 		// setting zero
-		state_old.v_ << 0,0,0;
+		state_old_ptr->v_ << 0,0,0;
 		/////////////////////////
 		H_old.block<3, 3> (0, 0) = _identity3 * state_old.L_; // p
 		// H_old.block<3, 3> (0, 6) = - C_q.transpose() * pci_sk * state_old.L_; // q
@@ -231,7 +249,7 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	
 
 	// attitude
-	H_old.block<3, 3> (3, 6) = _identity3; //C_ci; // q
+	H_old.block<3, 3> (3, 6) = _identity3; // state_old.q_.toRotationMatrix(); //???? _identity3; //C_ci; // q
 	// H_old.block<3, 3> (3, 16) = C_ci * C_q; // q_wv
 	// H_old.block<3, 3> (3, 19) = _identity3 ; //q_ci
 	// H_old(6, 18) = 1.0; // fix vision world yaw drift because unobservable otherwise (see PhD Thesis)
@@ -251,7 +269,8 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 		if (r_old.block<3, 1> (0, 0).norm() > 0.5)
 			ROS_WARN_STREAM( "BIG VELOCITY CHANGE: " << (r_old.block<3, 1>(0, 0).norm()) );
 		
-		ROS_INFO_STREAM("v_err between z_p_ - v_ in world: " <<  (z_q_.toRotationMatrix() * z_p_ - state_old.v_).transpose()  );
+		ROS_INFO_STREAM("v_err between z_p_ - v_ in world (IMU z_q_): " <<  (z_q_.toRotationMatrix() * z_p_ / state_old.L_ - state_old.v_).transpose()  );
+		ROS_INFO_STREAM("v_err between z_p_ - v_ in world (state q_): " <<  (state_old.q_.toRotationMatrix() * z_p_ / state_old.L_ - state_old.v_).transpose()  );
 	}
 
 	
@@ -263,16 +282,21 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 
 	ROS_INFO_STREAM("q_err between q_ and z_q_: " << q_err.w() << ", " << q_err.vec().transpose());
 
-	if (q_err.w() > 0.0)
-		r_old.block<3, 1> (3, 0) = q_err.vec() * 2;
-	else
-		r_old.block<3, 1> (3, 0) = - q_err.vec() * 2;
+
+	r_old.block<3, 1> (3, 0) = q_err.vec() / q_err.w()  * 2;
+
+
+	// if (q_err.w() > 0.0)
+	// 	r_old.block<3, 1> (3, 0) = q_err.vec() * 2;
+	// else
+	// 	r_old.block<3, 1> (3, 0) = - q_err.vec() * 2;
+
 	// vision world yaw drift
 	// q_err = state_old.q_wv_;
 	// r_old(6, 0) = -2 * (q_err.w() * q_err.z() + q_err.x() * q_err.y()) / (1 - 2 * (q_err.y() * q_err.y() + q_err.z() * q_err.z()));
 
 	
-	ROS_INFO_STREAM( "H_old" << std::endl << H_old );
+	// ROS_INFO_STREAM( "H_old" << std::endl << H_old );
 	ROS_INFO_STREAM( "r_old" << std::endl << r_old.transpose() );
 
 	//ROS_INFO_STREAM( "P_old" << std::endl << state_old.P_ );
@@ -311,20 +335,21 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 		bool result = measurements->ssf_core_.applyMeasurement(idx, H_old, r_old, R, poseMsg->header);
 		if (!result)
 			ROS_WARN("Apply Measurement failed (imu not initialised properly?)");
+
+		// double check corrected angle
+
+		double theta_dev_after = 180.0/M_PI*std::acos( 2 * std::pow(z_q_.coeffs().dot(state_old_ptr->q_.coeffs()),2.0) - 1.0 );
+		ROS_WARN_STREAM( "after correction theta_dev (deg): " << theta_dev_after);
+		ROS_WARN_STREAM( "theta after: " << state_old_ptr->q_.w() << ", " << state_old_ptr->q_.vec().transpose());
+
+		if (theta_dev_after / theta_dev > 20)
+		{
+			ROS_WARN("BAD Variance of theta");
+			exit(1);
+		}
 	}
 	else{
 		ROS_WARN("Apply Measurement SKIPED");
-	}
-
-	// double check corrected angle
-
-	double theta_dev_after = 180.0/M_PI*std::acos( 2 * std::pow(z_q_.coeffs().dot(state_old.q_.coeffs()),2.0) - 1.0 );
-	ROS_WARN_STREAM( "after correction theta_dev (deg): " << theta_dev_after);
-
-	if (theta_dev_after / theta_dev > 1.5)
-	{
-		ROS_WARN("BAD Variance");
-		exit(1);
 	}
 
 	// broadcast the calibration as well as posterior pose estimate, to external VO.

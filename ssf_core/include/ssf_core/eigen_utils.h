@@ -92,7 +92,7 @@ template<class Derived>
 
     if ( q_squared < 1)
     {
-      return Eigen::Quaternion<Scalar>(sqrt(1 - q_squared), theta[0] * 0.5, theta[1] * 0.5, theta[2] * 0.5);
+      return Eigen::Quaternion<Scalar>(sqrt(1 - q_squared), theta[0] * 0.5, theta[1] * 0.5, theta[2] * 0.5).normalized();
     }
     else
     {
@@ -101,7 +101,7 @@ template<class Derived>
       std::cerr << "//////////////////////////////////////" << std::endl;
       const Scalar w = 1.0 / sqrt(1 + q_squared);
       const Scalar f = w*0.5;
-      return Eigen::Quaternion<Scalar>(w, theta[0] * f, theta[1] * f, theta[2] * f);
+      return Eigen::Quaternion<Scalar>(w, theta[0] * f, theta[1] * f, theta[2] * f).normalized();
     }
   }
 

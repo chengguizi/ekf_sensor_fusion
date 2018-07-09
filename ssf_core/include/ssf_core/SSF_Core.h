@@ -97,7 +97,7 @@ public:
 									const Eigen::Quaternion<double> & q_ci, const Eigen::Matrix<double, 3, 1> & p_ci);
 
 	/// retreive all state information at time t. Used to build H, residual and noise matrix by update sensors
-	unsigned char getClosestState(State* timestate, ros::Time tstamp, double delay = 0.00);
+	unsigned char getClosestState(State*& timestate, ros::Time tstamp, double delay = 0.00);
 
 	/// get all state information at a given index in the ringbuffer
 	//bool getStateAtIdx(State* timestate, unsigned char idx);
@@ -141,6 +141,8 @@ public:
 
 		return isImuCacheReady;
 	}
+
+	State getCurrentState(unsigned char& idx){idx = idx_state_; return StateBuffer_[idx_state_];}
 
 	SSF_Core();
 	~SSF_Core();
@@ -202,7 +204,7 @@ private:
 	ros::Time global_start_;
 	ros::Time lastImuInputsTime_;
 	
-	const static int imuInputsCache_size = 512;
+	const static int imuInputsCache_size = 256;
 	struct ImuInputsCache imuInputsCache[imuInputsCache_size];
 	bool isImuCacheReady;
 

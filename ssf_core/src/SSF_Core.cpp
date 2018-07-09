@@ -33,6 +33,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "calcQ.h"
 #include <ssf_core/eigen_utils.h>
 
+#include <cassert>
+
 namespace ssf_core
 {
 SSF_Core::SSF_Core() : imu_received_(0), mag_received_(0)
@@ -148,6 +150,9 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 	imuInputsCache_ptr->m_m_ << msg_mag->magnetic_field.x, msg_mag->magnetic_field.y, msg_mag->magnetic_field.z;
 	imuInputsCache_ptr->q_m_ = Eigen::Quaternion<double>(msg->orientation.w, msg->orientation.x, msg->orientation.y, msg->orientation.z); 
 
+	assert( fabs(imuInputsCache_ptr->q_m_.norm() - 1.0) < 1e-2 );
+	imuInputsCache_ptr->q_m_.normalize();
+
 	if (imuCacheIdx == imuInputsCache_size - 1)
 		isImuCacheReady = true;
 
@@ -252,7 +257,6 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 	pubPose_.publish(msgPose_);
 
 	// publish transforms to help initialising VO
-	// THIS SHOULD NOT BE HERE, AS LATER CORRECTION WILL UPDATE AGAIN
 	broadcast_ci_transformation((unsigned char)(idx_state_ - 1),msgPose_.header.stamp);
 	broadcast_iw_transformation((unsigned char)(idx_state_ - 1),msgPose_.header.stamp);
 
@@ -346,8 +350,6 @@ void SSF_Core::propagateState(const double dt)
 	// for stationary situration, reset acceleration to zero
 	if (dv_without_g.norm() < 0.03)
 		dv_without_g.setZero();
-	else if (dv_without_g.norm() < 0.1)
-		dv_without_g = (dv_without_g.norm() - 0.03)/0.1*dv_without_g;
 
 	ROS_INFO_STREAM_THROTTLE(1, "\ndv-g based on current: " << (cur_state.q_.toRotationMatrix() * ea  - g_).transpose() << std::endl
 		<< "dv-g based on avg (with zero correction): " << dv_without_g.transpose() << std::endl
@@ -356,7 +358,7 @@ void SSF_Core::propagateState(const double dt)
 	cur_state.v_ = prev_state.v_ + dv_without_g * dt; // dv is world coordinate accerlation
 
 	// TO PREVENT DRIFT, TRY MAKING THINGS SMALLER
-	cur_state.v_ = cur_state.v_*(1.0 - dt*1e-3);
+	cur_state.v_ = cur_state.v_*(1.0 - dt*1e-2);
 
 	cur_state.p_ = prev_state.p_ + ((cur_state.v_ + prev_state.v_) / 2.0 * dt);
 	cur_state.p_int_ = prev_state.p_int_ + ((cur_state.v_ + prev_state.v_) / 2.0 * dt);
@@ -450,6 +452,8 @@ void SSF_Core::predictProcessCovariance(const double dt)
 
 	calc_Q(dt, StateBuffer_[idx_P_].q_, ew, ea, nav, nbav, nwv, nbwv, config_.noise_scale, nqwvv, nqciv, npicv, Qd_);
 
+	// ROS_INFO_STREAM("Qd_.diagonal():\n" << Qd_.diagonal().transpose());
+
 	StateBuffer_[idx_P_].P_ = Fd_ * StateBuffer_[(unsigned char)(idx_P_ - 1)].P_ * Fd_.transpose() + Qd_;
 
 	idx_P_++;
@@ -469,7 +473,7 @@ void SSF_Core::predictProcessCovariance(const double dt)
 // 	return true;
 // }
 
-unsigned char SSF_Core::getClosestState(State* timestate, ros::Time tstamp, double delay)
+unsigned char SSF_Core::getClosestState(State*& timestate, ros::Time tstamp, double delay)
 {  
 	// if (!predictionMade_)
 	// {
@@ -497,13 +501,13 @@ unsigned char SSF_Core::getClosestState(State* timestate, ros::Time tstamp, doub
 	if (StateBuffer_[idx].time_ == 0)
 	{
 		std::cout  << "getClosestState(): too far in past" << std::endl;
-		timestate->time_ = -1; // hm: add to make sure -1 logic condition holds for all failure cases
+		//timestate->time_ = -1; // hm: add to make sure -1 logic condition holds for all failure cases
 		return false; // // early abort // //  not enough predictions made yet to apply measurement (too far in past)
 	}
 
 	propPToIdx(idx); // catch up with covariance propagation if necessary
 
-	*timestate = StateBuffer_[idx];
+	timestate = &(StateBuffer_[idx]);
 
 	return idx;
 }
