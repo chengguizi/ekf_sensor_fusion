@@ -89,67 +89,77 @@ public:
 
 	void initStateZero(struct ssf_core::ImuInputsCache& imuEstimateMean)
 	{
-
-		//////////////////////////////////
-		/// q_iw estimation
-		//////////////////////////////////
-
-		Eigen::Vector3d normalvec_m;
-		// if there is no magnetometer input, set it to x direction
-		if (imuEstimateMean.m_m_.isZero())
-		{
-			ROS_WARN("There is no magnetometer readings, assume North is in Z-axis");
-			normalvec_m << 0, 0, 1;
-		}else{ // there is readings
-			normalvec_m = imuEstimateMean.m_m_.normalized().array();
-		}
-
-		// std::cout << "normalvec_m " << normalvec_m << std::endl;
-
-		Eigen::Vector3d normalvec_down;
-		if (imuEstimateMean.a_m_.norm() > 11 || imuEstimateMean.a_m_.norm() < 8)
-		{
-			ROS_WARN_STREAM("The gravity readings might be out of range: " << imuEstimateMean.a_m_.norm() );
-			exit(1);
-		}
-		
-		//// IMPORTANT: gravity direction is straight upwards!
-		g_ << 0, 0, - imuEstimateMean.a_m_.norm() ; // gravity is in z-axis, using NED coordinate
-
-		std::cout << "g_ = " << std::endl << g_.transpose() << std::endl;
-
-		normalvec_down = - imuEstimateMean.a_m_.normalized().array(); // negative direction of gravity acceleration
-
-		//std::cout << "normalvec_g " << normalvec_g << std::endl;
-		
-		Eigen::Hyperplane<double,3> horizontal_plane = Eigen::Hyperplane<double,3>(normalvec_down, Eigen::VectorXd::Zero(3));
-
-		// Calculation projection of magnetic field onto the horizontal plane
-		Eigen::Vector3d normalvec_north = horizontal_plane.projection(normalvec_m);
-
-		if (normalvec_north.norm() / normalvec_m.norm() < 0.5 )
-		{
-			ROS_WARN_STREAM("Magnetic North is too small in the horizontal plane: " << normalvec_north.norm() / normalvec_m.norm());
-			exit(1);
-		}
-		normalvec_north.normalize();
-		//std::cout << "horizontal_plane= " << horizontal_plane.coeffs() << std::endl;
-
-		Eigen::Vector3d normalvec_east = normalvec_down.cross(normalvec_north).normalized();
-
+		const bool use_imu_internal_q = true;
 		Eigen::Matrix3d R_wi,R_iw; 
-		// rotation matrix R_wi represents the world frame (NED) coordinate in IMU-Frame
-		std::cout << "normalvec_north: " << normalvec_north.transpose() << std::endl;
-		std::cout << "normalvec_east: " << normalvec_east.transpose() << std::endl;
-		std::cout << "normalvec_down: " << normalvec_down.transpose() << std::endl;
+		if (use_imu_internal_q == false)
+		{
+			//////////////////////////////////
+			/// q_iw estimation
+			//////////////////////////////////
 
-		R_wi << normalvec_north, normalvec_east, normalvec_down;
-		R_iw = R_wi.transpose();
-		std::cout << "R_iw = " << std::endl << R_iw << std::endl;
+			Eigen::Vector3d normalvec_m;
+			// if there is no magnetometer input, set it to x direction
+			if (imuEstimateMean.m_m_.isZero())
+			{
+				ROS_WARN("There is no magnetometer readings, assume North is in Z-axis");
+				normalvec_m << 0, 0, 1;
+			}else{ // there is readings
+				normalvec_m = imuEstimateMean.m_m_.normalized().array();
+			}
 
-		Eigen::Quaternion<double> q_iw(R_iw);
-		q_iw_ = q_iw;
+			// std::cout << "normalvec_m " << normalvec_m << std::endl;
 
+			Eigen::Vector3d normalvec_down;
+			if (imuEstimateMean.a_m_.norm() > 11 || imuEstimateMean.a_m_.norm() < 8)
+			{
+				ROS_WARN_STREAM("The gravity readings might be out of range: " << imuEstimateMean.a_m_.norm() );
+				exit(1);
+			}
+			
+			//// IMPORTANT: gravity direction is straight upwards!
+			g_ << 0, 0, - imuEstimateMean.a_m_.norm() ; // gravity is in z-axis, using NED coordinate
+
+			std::cout << "g_ = " << std::endl << g_.transpose() << std::endl;
+
+			normalvec_down = - imuEstimateMean.a_m_.normalized().array(); // negative direction of gravity acceleration
+
+			//std::cout << "normalvec_g " << normalvec_g << std::endl;
+			
+			Eigen::Hyperplane<double,3> horizontal_plane = Eigen::Hyperplane<double,3>(normalvec_down, Eigen::VectorXd::Zero(3));
+
+			// Calculation projection of magnetic field onto the horizontal plane
+			Eigen::Vector3d normalvec_north = horizontal_plane.projection(normalvec_m);
+
+			if (normalvec_north.norm() / normalvec_m.norm() < 0.5 )
+			{
+				ROS_WARN_STREAM("Magnetic North is too small in the horizontal plane: " << normalvec_north.norm() / normalvec_m.norm());
+				exit(1);
+			}
+			normalvec_north.normalize();
+			//std::cout << "horizontal_plane= " << horizontal_plane.coeffs() << std::endl;
+
+			Eigen::Vector3d normalvec_east = normalvec_down.cross(normalvec_north).normalized();
+
+			
+			// rotation matrix R_wi represents the world frame (NED) coordinate in IMU-Frame
+			std::cout << "normalvec_north: " << normalvec_north.transpose() << std::endl;
+			std::cout << "normalvec_east: " << normalvec_east.transpose() << std::endl;
+			std::cout << "normalvec_down: " << normalvec_down.transpose() << std::endl;
+
+			R_wi << normalvec_north, normalvec_east, normalvec_down;
+			R_iw = R_wi.transpose();
+			std::cout << "R_iw = " << std::endl << R_iw << std::endl;
+
+			Eigen::Quaternion<double> q_iw(R_iw);
+			q_iw_ = q_iw;
+		}
+		else{ // use imu internal q
+			ROS_WARN("USING IMU INTERNAL QUATERNION ESTIMATION.");
+			q_iw_ = imuEstimateMean.q_m_;
+			R_iw = q_iw_.toRotationMatrix();
+			R_wi = R_iw.transpose();
+			g_ << 0, 0, - imuEstimateMean.a_m_.norm();
+		}
 		//////////////////////////////////
 		/// Bias Estimation
 		//////////////////////////////////
@@ -205,10 +215,12 @@ public:
 						result.avg.a_m_ += imuCache[i+k].a_m_;
 						result.avg.w_m_ += imuCache[i+k].w_m_;
 						result.avg.m_m_ += imuCache[i+k].m_m_;
+						result.avg.q_m_.coeffs() += imuCache[i+k].q_m_.coeffs();
 					}
 					result.avg.a_m_ /= i;
 					result.avg.w_m_ /= i;
 					result.avg.m_m_ /= i;
+					result.avg.q_m_.coeffs() /= i;
 
 					result_vec.push_back(result);
 				}
@@ -224,11 +236,13 @@ public:
 					max_result.avg.a_m_ += result.avg.a_m_;
 					max_result.avg.w_m_ += result.avg.w_m_;
 					max_result.avg.m_m_ += result.avg.m_m_;
+					max_result.avg.q_m_.coeffs() += result.avg.q_m_.coeffs();
 
 				}
 				max_result.avg.a_m_ /= result_vec.size();
 				max_result.avg.w_m_ /= result_vec.size();
 				max_result.avg.m_m_ /= result_vec.size();
+				max_result.avg.q_m_.coeffs() /= result_vec.size();
 
 				// calculate overall variance
 				for (auto result : result_vec)
@@ -236,10 +250,12 @@ public:
 					max_result.var.a_m_ = max_result.var.a_m_.array() + (result.avg.a_m_ - max_result.avg.a_m_).array().pow(2.0);
 					max_result.var.w_m_ = max_result.var.w_m_.array() + (result.avg.w_m_ - max_result.avg.w_m_).array().pow(2.0);
 					max_result.var.m_m_ = max_result.var.m_m_.array() + (result.avg.m_m_ - max_result.avg.m_m_).array().pow(2.0);
+					max_result.var.q_m_.coeffs() = max_result.var.q_m_.coeffs().array() + (result.avg.q_m_.coeffs() - max_result.avg.q_m_.coeffs()).array().pow(2.0);
 				}
 				max_result.var.a_m_ /= result_vec.size();
 				max_result.var.w_m_ /= result_vec.size();
 				max_result.var.m_m_ /= result_vec.size();
+				max_result.var.q_m_.coeffs() /= result_vec.size();
 
 
 				std::cout << "avg.a_m_" << max_result.avg.a_m_.transpose();
@@ -248,23 +264,30 @@ public:
 				std::cout << "avg.w_m_" << max_result.avg.w_m_.transpose();
 				std::cout << "\tvar.w_m_" << max_result.var.w_m_.transpose();
 				std::cout << std::endl;
+				std::cout << "avg.m_m_" << max_result.avg.m_m_.transpose();
+				std::cout << "\tvar.m_m_" << max_result.var.m_m_.transpose();
+				std::cout << std::endl;
+				std::cout << "avg.q_m_" << max_result.avg.q_m_.coeffs().transpose();
+				std::cout << "\tvar.q_m_" << max_result.var.q_m_.coeffs().transpose();
+				std::cout << std::endl;
 
-				if (max_result.var.a_m_.norm() < 0.05 && max_result.var.w_m_.norm() < 0.001 ) // variance smaller than 0.05 m/s^2
+				// can be 0.8, 0.05, 0.002
+				if (max_result.var.a_m_.norm() < 0.05 && max_result.var.w_m_.norm() < 0.001 && max_result.var.m_m_.norm() < 0.05 ) // variance smaller than 0.05 m/s^2
 				{
 					// CHECK FOR GRAVITY ESTIMATE
 
-					if ( fabs( max_result.avg.a_m_.norm() - 9.7760) > 0.2 )
+					if ( fabs( max_result.avg.a_m_.norm() - 9.7760) < 0.5 )
 					{
-						ROS_ERROR_STREAM("IMU Gravity estimate deviate too much from reference: 9.7760, retrying...");
-						continue;
-					}
-					
-					imuEstimateMean = max_result.avg;
+						imuEstimateMean = max_result.avg;
 								
-					w_m_ = imuEstimateMean.w_m_;
-					a_m_ = imuEstimateMean.a_m_;
-					m_m_ = imuEstimateMean.m_m_;
-					break;
+						w_m_ = imuEstimateMean.w_m_;
+						a_m_ = imuEstimateMean.a_m_;
+						m_m_ = imuEstimateMean.m_m_;
+						q_m_ = imuEstimateMean.q_m_;
+						break;
+					}
+
+					ROS_ERROR_STREAM("IMU Gravity estimate deviate too much from reference: 9.7760, retrying: " << max_result.avg.a_m_.norm());
 				}
 					
 			}
@@ -303,6 +326,7 @@ private:
 
 	// Initial Readings (Mean)
 	Eigen::Matrix<double, 3, 1> w_m_, a_m_, m_m_;
+	Eigen::Quaternion<double> q_m_;
 
 	double scale_;
 
@@ -310,7 +334,12 @@ private:
 
 	void init()
 	{
-		std::cout << "q_iw_ = " << std::endl << q_iw_.coeffs() << std::endl; // x,y,z,w
+		std::cout << "q_iw_ = " << q_iw_.coeffs().transpose() << std::endl; // x,y,z,w
+
+		std::cout << "compared to q_m_" << q_m_.coeffs().transpose() << std::endl;
+
+		assert ( (q_m_.coeffs() - q_iw_.coeffs()).norm() < 0.1 ); // check consistency with IMU's internal state, 10%
+
 		if (q_iw_.norm() == 0) // eigen library convention(x,y,z,w)
 		{
 			ROS_ERROR("q_iw_ is not initialised / estimated properly.");
@@ -338,15 +367,24 @@ private:
 		//// Constructing initial State Variance
 		/////////////////////////////////////////////
 		P_.setZero(); // error state covariance; if zero, a default initialization in ssf_core is used
-		Eigen::Vector3d initvar_p(Eigen::VectorXd::Zero(3)); // initial position is known
-		Eigen::Vector3d initvar_v(Eigen::VectorXd::Ones(3)*1); // variance of 1 m/s
-		Eigen::Vector3d initvar_q_err(Eigen::VectorXd::Ones(3)*pow(0.1,2.0) ); // TODO: HOW TO ESTIMATE THIS?
-		Eigen::Vector3d initvar_b_w(Eigen::VectorXd::Ones(3)*1*pow(M_PI/6.0,2.0)); 
-		Eigen::Vector3d initvar_b_a(Eigen::VectorXd::Ones(3)*1*pow(0.1,2.0));
-		double initvar_L = 0;
-		Eigen::Vector3d initvar_q_wv_err(Eigen::VectorXd::Zero(3));
-		Eigen::Vector3d initvar_q_ci_err(Eigen::VectorXd::Zero(3));
-		Eigen::Vector3d initvar_p_ci_(Eigen::VectorXd::Zero(3));
+		double init_np = 0.0;
+		double init_nv = 0.01;
+		double init_nq = 0.1;
+		double init_nbw = 0.001;
+		double init_nba = 0.001;
+		double init_L = 0.001;
+		double init_qwv = 0.0;
+		double init_qci = 0.001;
+		double init_pci = 0.001;
+		Eigen::Vector3d initvar_p(Eigen::VectorXd::Ones(3)			*	init_np*init_np); // initial position is known
+		Eigen::Vector3d initvar_v(Eigen::VectorXd::Ones(3)			*	init_nv*init_nv); // variance of 1 m/s
+		Eigen::Vector3d initvar_q_err(Eigen::VectorXd::Ones(3)		*	init_nq*init_nq); // TODO: HOW TO ESTIMATE THIS?
+		Eigen::Vector3d initvar_b_w(Eigen::VectorXd::Ones(3)		*	init_nbw*init_nbw); 
+		Eigen::Vector3d initvar_b_a(Eigen::VectorXd::Ones(3)		*	init_nba*init_nba);
+		double initvar_L = 												init_L*init_L;
+		Eigen::Vector3d initvar_q_wv_err(Eigen::VectorXd::Ones(3)	* 	init_qwv*init_qwv);
+		Eigen::Vector3d initvar_q_ci_err(Eigen::VectorXd::Ones(3)	*	init_qci*init_qci);
+		Eigen::Vector3d initvar_p_ci_(Eigen::VectorXd::Ones(3)		*	init_pci*init_pci);
 
 		Eigen::VectorXd P_diagonal(P_.rows());
 		P_diagonal << initvar_p , initvar_v , initvar_q_err , initvar_b_w , initvar_b_a , initvar_L	, initvar_q_wv_err , initvar_q_ci_err , initvar_p_ci_;

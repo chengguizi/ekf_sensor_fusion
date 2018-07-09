@@ -96,6 +96,9 @@ template<class Derived>
     }
     else
     {
+      std::cerr << "//////////////////////////////////////" << std::endl;
+      std::cerr << "QUAT FROM SMALLANGLE: q_squared > 1: " << q_squared << std::endl;
+      std::cerr << "//////////////////////////////////////" << std::endl;
       const Scalar w = 1.0 / sqrt(1 + q_squared);
       const Scalar f = w*0.5;
       return Eigen::Quaternion<Scalar>(w, theta[0] * f, theta[1] * f, theta[2] * f);

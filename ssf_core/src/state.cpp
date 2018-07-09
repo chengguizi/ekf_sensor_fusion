@@ -125,6 +125,42 @@ void State::toStateMsg(sensor_fusion_comm::DoubleArrayStamped & state)
 	state.data[25] = p_ci_[0];
 	state.data[26] = p_ci_[1];
 	state.data[27] = p_ci_[2];
+
+	state.data[28] = P_(0,0); // p
+	state.data[29] = P_(1,1);
+	state.data[30] = P_(2,2);
+
+	state.data[31] = P_(3,3); // v
+	state.data[32] = P_(4,4);
+	state.data[33] = P_(5,5);
+
+	state.data[34] = P_(6,6); // q (theta)
+	state.data[35] = P_(7,7);
+	state.data[36] = P_(8,8);
+
+	state.data[37] = P_(9,9); // b_w
+	state.data[38] = P_(10,10);
+	state.data[39] = P_(11,11);
+
+	state.data[40] = P_(12,12); // b_a
+	state.data[41] = P_(13,13);
+	state.data[42] = P_(14,14);
+
+	state.data[43] = P_(15,15); // L
+
+	state.data[44] = P_(16,16); // q_wv
+	state.data[45] = P_(17,17);
+	state.data[46] = P_(18,18);
+	
+	state.data[47] = P_(19,19); // q_ci
+	state.data[48] = P_(20,20);
+	state.data[49] = P_(21,21);
+
+	state.data[50] = P_(22,22); // p_ci
+	state.data[51] = P_(23,23);
+	state.data[52] = P_(24,24);
+
+
 }
 
 void State::toTransformMsg(geometry_msgs::TransformStamped& tf_stamped, 

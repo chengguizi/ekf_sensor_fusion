@@ -72,6 +72,7 @@ public:
   Eigen::Matrix<double,3,1> w_m_;         ///< angular velocity from IMU
   Eigen::Matrix<double,3,1> a_m_;         ///< acceleration from IMU
   Eigen::Matrix<double,3,1> m_m_;         ///< magnetometer readings 
+  Eigen::Quaternion<double> q_m_;         ///< attitude measurement
 
   Eigen::Quaternion<double> q_int_;       ///< this is the integrated ang. vel. no corrections applied, to use for delta rot in external algos...
   Eigen::Matrix<double, 3, 1> p_int_;     ///< integrated position
@@ -110,17 +111,18 @@ public:
   friend std::ostream& operator<<(std::ostream& os, const State& state)  
   {  
       os << "State:" << std::endl;
-      os << "p: " << std::endl << state.p_.transpose() << std::endl;
-      os << "v: " << std::endl << state.v_.transpose() << std::endl;
-      os << "q: " << std::endl << state.q_.w() << ", " << state.q_.vec().transpose() << std::endl;
-      os << "b_w_: " << std::endl << state.b_w_.transpose() << std::endl;
-      os << "b_a_: " << std::endl << state.b_a_.transpose() << std::endl;
-      os << "L_: " << std::endl << state.L_ << std::endl;
-      os << "q_wv_: " << std::endl << state.q_wv_.w() << ", " << state.q_wv_.vec().transpose() << std::endl;
-      os << "q_ci_: " << std::endl << state.q_ci_.w() << ", " << state.q_ci_.vec().transpose() << std::endl;
-      os << "w_m_: " << std::endl << state.w_m_.transpose() << std::endl;
-      os << "a_m_: " << std::endl << state.a_m_.transpose() << std::endl; 
-      os << "m_m_: " << std::endl << state.m_m_.transpose() << std::endl;
+      os << "p: " << state.p_.transpose() << std::endl;
+      os << "v: " << state.v_.transpose() << std::endl;
+      os << "q: "  << state.q_.w() << ", " << state.q_.vec().transpose() << std::endl;
+      os << "b_w_: "  << state.b_w_.transpose() << std::endl;
+      os << "b_a_: " << state.b_a_.transpose() << std::endl;
+      os << "L_: "  << state.L_ << std::endl;
+      os << "q_wv_: "  << state.q_wv_.w() << ", " << state.q_wv_.vec().transpose() << std::endl;
+      os << "q_ci_: "  << state.q_ci_.w() << ", " << state.q_ci_.vec().transpose() << std::endl;
+      os << "p_ci_: "  << state.p_ci_.transpose() << std::endl;
+      os << "w_m_: "  << state.w_m_.transpose() << std::endl;
+      os << "a_m_: "  << state.a_m_.transpose() << std::endl; 
+      os << "m_m_: "  << state.m_m_.transpose() << std::endl;
       return os;  
   }  
 

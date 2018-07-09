@@ -47,7 +47,7 @@ SSF_Core::SSF_Core() : imu_received_(0), mag_received_(0)
 	pubPoseCorrected_ = nh_local.advertise<geometry_msgs::PoseWithCovarianceStamped> ("pose_corrected", 3);
 	//pubPoseCrtl_ = nh.advertise<sensor_fusion_comm::ExtState> ("ext_state", 1);
 
-	msgState_.data.resize(nFullState_, 0);
+	msgState_.data.resize(nFullState_ + N_STATE, 0);
 
 	subImu_.subscribe(nh_local,"imu_state_input", N_STATE_BUFFER);
 	subMag_.subscribe(nh_local,"mag_state_input", N_STATE_BUFFER);
@@ -146,6 +146,7 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 	imuInputsCache_ptr->a_m_ << msg->linear_acceleration.x, msg->linear_acceleration.y, msg->linear_acceleration.z;
 	imuInputsCache_ptr->w_m_ << msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z;
 	imuInputsCache_ptr->m_m_ << msg_mag->magnetic_field.x, msg_mag->magnetic_field.y, msg_mag->magnetic_field.z;
+	imuInputsCache_ptr->q_m_ = Eigen::Quaternion<double>(msg->orientation.w, msg->orientation.x, msg->orientation.y, msg->orientation.z); 
 
 	if (imuCacheIdx == imuInputsCache_size - 1)
 		isImuCacheReady = true;
@@ -193,12 +194,13 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 	StateBuffer_[idx_state_].a_m_ << msg->linear_acceleration.x, msg->linear_acceleration.y, msg->linear_acceleration.z;
 	StateBuffer_[idx_state_].w_m_ << msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z;
 	StateBuffer_[idx_state_].m_m_ << msg_mag->magnetic_field.x, msg_mag->magnetic_field.z, msg_mag->magnetic_field.z;
-
+	StateBuffer_[idx_state_].q_m_ = Eigen::Quaternion<double>(msg->orientation.w, msg->orientation.x, msg->orientation.y, msg->orientation.z); 
+	StateBuffer_[idx_state_].q_m_.normalize();
 	// DEBUG
 	// StateBuffer_[idx_state_].a_m_ = StateBuffer_[(unsigned char)(idx_state_ - 1)].a_m_;
 	// StateBuffer_[idx_state_].w_m_ = StateBuffer_[(unsigned char)(idx_state_ - 1)].w_m_;
 	// StateBuffer_[idx_state_].m_m_ = StateBuffer_[(unsigned char)(idx_state_ - 1)].m_m_;
-	std::cout << "imuCallback()" << std::endl;
+	//std::cout << "imuCallback()" << all_received_ << std::endl;
 
 	// remove acc spikes (TODO: find a cleaner way to do this)
 	static Eigen::Matrix<double, 3, 1> last_am = Eigen::Matrix<double, 3, 1>(0, 0, 0);
@@ -237,7 +239,7 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 	// idx_P_++;
 	// HM : from here, both idx_state_ and idx_P_ INCREMENT!
 	
-	checkForNumeric((double*)(&StateBuffer_[(unsigned char)(idx_state_ - 1)].p_[0]), 3, "prediction p");
+	assert(checkForNumeric((double*)(&StateBuffer_[(unsigned char)(idx_state_ - 1)].p_[0]), 3, "prediction p"));
 
 	//predictionMade_ = true;
 
@@ -250,14 +252,15 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 	pubPose_.publish(msgPose_);
 
 	// publish transforms to help initialising VO
+	// THIS SHOULD NOT BE HERE, AS LATER CORRECTION WILL UPDATE AGAIN
 	broadcast_ci_transformation((unsigned char)(idx_state_ - 1),msgPose_.header.stamp);
 	broadcast_iw_transformation((unsigned char)(idx_state_ - 1),msgPose_.header.stamp);
 
-	std::cout << updated_state << std::endl;
+	// std::cout << updated_state << std::endl;
 
-	double theta_dev = 180.0/M_PI*std::acos( 2 * std::pow(initial_q_.coeffs().dot(updated_state.q_.coeffs()),2.0) - 1 );
-	std::cout << "theta_dev (deg): " << theta_dev << std::endl;
-	std::cout << "P diagonal(): " << std::endl << updated_state.P_.diagonal().transpose() << std::endl;
+	double theta_dev = 180.0/M_PI*std::acos( 2 * std::pow(initial_q_.coeffs().dot(updated_state.q_.coeffs()),2.0) - 1.0 );
+	ROS_INFO_STREAM_THROTTLE(1, "theta_dev (deg): " << theta_dev << std::endl
+		 << "P diagonal(): " << std::endl << updated_state.P_.diagonal().transpose() << std::endl);
 
 	// msgPoseCtrl_.header = msgPose_.header;
 	// StateBuffer_[(unsigned char)(idx_state_ - 1)].toExtStateMsg(msgPoseCtrl_);
@@ -294,12 +297,13 @@ void SSF_Core::propagateState(const double dt)
 
 	Eigen::Matrix<double, 3, 1>  ew_avg = (ew + ewold) / 2.0;
 
-	std::cout<< "ew_avg:" << ew_avg.transpose() << std::endl; 
+	//std::cout<< "ew_avg:" << ew_avg.transpose() << std::endl; 
 
 	if (ew_avg.norm() < 0.01)
 		ew_avg.setZero();
 	else if (ew_avg.norm() < 0.03)
 		ew_avg = (ew_avg.norm() - 0.01)/0.03 * ew_avg;
+
 
 	Matrix4 OmegaMean = omegaMatJPL(ew_avg);
 
@@ -325,6 +329,9 @@ void SSF_Core::propagateState(const double dt)
 	cur_state.q_.coeffs() = quat_int * prev_state.q_.coeffs();
 	cur_state.q_.normalize();
 
+	// OVERRIDE USING IMU'S INTERNAL ATTITUDE INFOMATION!
+	// cur_state.q_ = cur_state.q_m_;
+
 	// first oder quaternion integration
 	cur_state.q_int_.coeffs() = quat_int * prev_state.q_int_.coeffs();
 	cur_state.q_int_.normalize();
@@ -337,16 +344,20 @@ void SSF_Core::propagateState(const double dt)
 	dv_without_g = dv - g_;
 
 	// for stationary situration, reset acceleration to zero
-	// if (dv_without_g.norm() < 0.03)
-	// 	dv_without_g.setZero();
-	// else if (dv_without_g.norm() < 0.1)
-	// 	dv_without_g = (dv_without_g.norm() - 0.03)/0.1*dv_without_g;
+	if (dv_without_g.norm() < 0.03)
+		dv_without_g.setZero();
+	else if (dv_without_g.norm() < 0.1)
+		dv_without_g = (dv_without_g.norm() - 0.03)/0.1*dv_without_g;
 
-	std::cout << "dv-g based on current: " << (cur_state.q_.toRotationMatrix() * ea  - g_).transpose() << std::endl;
-	std::cout << "dv-g based on avg (with zero correction): " << dv_without_g.transpose() << std::endl;
-	std::cout << "v change:" << (dv_without_g * dt).transpose() << std::endl;
+	ROS_INFO_STREAM_THROTTLE(1, "\ndv-g based on current: " << (cur_state.q_.toRotationMatrix() * ea  - g_).transpose() << std::endl
+		<< "dv-g based on avg (with zero correction): " << dv_without_g.transpose() << std::endl
+	 	<< "v change:" << (dv_without_g * dt).transpose() );
 
 	cur_state.v_ = prev_state.v_ + dv_without_g * dt; // dv is world coordinate accerlation
+
+	// TO PREVENT DRIFT, TRY MAKING THINGS SMALLER
+	cur_state.v_ = cur_state.v_*(1.0 - dt*1e-3);
+
 	cur_state.p_ = prev_state.p_ + ((cur_state.v_ + prev_state.v_) / 2.0 * dt);
 	cur_state.p_int_ = prev_state.p_int_ + ((cur_state.v_ + prev_state.v_) / 2.0 * dt);
 
@@ -438,6 +449,7 @@ void SSF_Core::predictProcessCovariance(const double dt)
 	Fd_.block<3, 3> (6, 9) = F;
 
 	calc_Q(dt, StateBuffer_[idx_P_].q_, ew, ea, nav, nbav, nwv, nbwv, config_.noise_scale, nqwvv, nqciv, npicv, Qd_);
+
 	StateBuffer_[idx_P_].P_ = Fd_ * StateBuffer_[(unsigned char)(idx_P_ - 1)].P_ * Fd_.transpose() + Qd_;
 
 	idx_P_++;
@@ -533,6 +545,9 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 		correction_(24) = 0; //p_ci z
 	}
 
+	assert( !( config_.fixed_scale || config_.fixed_bias || config_.fixed_calib ) );
+
+	ROS_WARN_STREAM("\ncorrection_ " << correction_.transpose() );
 	// state update:
 
 	// store old values in case of fuzzy tracking
@@ -559,6 +574,8 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 	}
 
 	auto qbuff_q = quaternionFromSmallAngle(correction_.block<3, 1> (6, 0));
+
+	ROS_WARN_STREAM( "qbuff_q: " << qbuff_q.w() << ", " << qbuff_q.vec().transpose() );
 	delaystate.q_ = delaystate.q_ * qbuff_q;
 	delaystate.q_.normalize();
 
@@ -628,7 +645,7 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 	}
 		
  
-	checkForNumeric(&correction_[0], HLI_EKF_STATE_SIZE, "update");
+	assert(checkForNumeric(&correction_[0], HLI_EKF_STATE_SIZE, "update"));
 
 
 	// publish state
@@ -682,9 +699,16 @@ double SSF_Core::getMedian(const Eigen::Matrix<double, nBuff_, 1> & data)
 		return 0;
 }
 
-void SSF_Core::broadcast_ci_transformation(const unsigned char idx, const ros::Time& timestamp)
+void SSF_Core::broadcast_ci_transformation(const unsigned char idx, const ros::Time& timestamp, bool gotMeasurement)
 {
+	static bool isPreMeasurement = true;
 	static int seq = 0;
+
+	if (gotMeasurement)
+	{
+		isPreMeasurement = false;
+	}else if (!isPreMeasurement)
+		return;
 
 	State &state = StateBuffer_[idx];
 
@@ -732,14 +756,23 @@ void SSF_Core::broadcast_ci_transformation(const unsigned char idx, const ros::T
 	
 }
 
-void SSF_Core::broadcast_iw_transformation(const unsigned char idx, const ros::Time& timestamp)
+void SSF_Core::broadcast_iw_transformation(const unsigned char idx, const ros::Time& timestamp, bool gotMeasurement)
 {
+	static bool isPreMeasurement = true;
 	static int seq = 0;
+
+	if (gotMeasurement)
+	{
+		isPreMeasurement = false;
+	}else if (!isPreMeasurement)
+		return;
 	
 	State &state = StateBuffer_[idx];
 
 	geometry_msgs::TransformStamped tf_stamped;
-	state.toTransformMsg(tf_stamped,state.p_,state.q_);
+	//state.toTransformMsg(tf_stamped,state.p_,state.q_);
+	// USE IMU INTERNAL MEASURMENT QUAT
+	state.toTransformMsg(tf_stamped,state.p_,state.q_m_);
 
 	tf_stamped.header.stamp = timestamp;
 	tf_stamped.header.frame_id = "world_frame";
