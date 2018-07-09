@@ -348,8 +348,13 @@ void SSF_Core::propagateState(const double dt)
 	dv_without_g = dv - g_;
 
 	// for stationary situration, reset acceleration to zero
-	if (dv_without_g.norm() < 0.03)
-		dv_without_g.setZero();
+	if (  fabs ( dv_without_g.norm() ) < 0.4 && fabs (dv.norm() - g_.norm()) < 0.2 )
+	{
+		ROS_INFO_STREAM_THROTTLE(0.25, "Resetting Speed to Zero");
+		// dv_without_g.setZero();
+		prev_state.v_.setZero();
+	}
+		
 
 	ROS_INFO_STREAM_THROTTLE(1, "\ndv-g based on current: " << (cur_state.q_.toRotationMatrix() * ea  - g_).transpose() << std::endl
 		<< "dv-g based on avg (with zero correction): " << dv_without_g.transpose() << std::endl
@@ -358,7 +363,7 @@ void SSF_Core::propagateState(const double dt)
 	cur_state.v_ = prev_state.v_ + dv_without_g * dt; // dv is world coordinate accerlation
 
 	// TO PREVENT DRIFT, TRY MAKING THINGS SMALLER
-	cur_state.v_ = cur_state.v_*(1.0 - dt*1e-2);
+	cur_state.v_ = cur_state.v_*(1.0 - dt*1e-1);
 
 	cur_state.p_ = prev_state.p_ + ((cur_state.v_ + prev_state.v_) / 2.0 * dt);
 	cur_state.p_int_ = prev_state.p_int_ + ((cur_state.v_ + prev_state.v_) / 2.0 * dt);
