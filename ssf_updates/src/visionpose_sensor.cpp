@@ -124,7 +124,6 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	Eigen::Matrix<double, N_MEAS, N_STATE> H_old;
 	Eigen::Matrix<double, N_MEAS, 1> r_old;
 	Eigen::Matrix<double, N_MEAS, N_MEAS> R;
-	
 
 	// get measurements
 	// z_p_ = Eigen::Matrix<double,3,1>(msg->transform.translation.x + dist(generator), msg->transform.translation.y + dist(generator), msg->transform.translation.z+ dist(generator)); /* read sensor information from msg: z_p_ is usually a position */
@@ -136,8 +135,12 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	z_q_ = Eigen::Quaternion<double>(poseMsg->pose.pose.orientation.w, poseMsg->pose.pose.orientation.x, 
 			poseMsg->pose.pose.orientation.y, poseMsg->pose.pose.orientation.z);
 
-	// for magnetometer readings
+	bool isVelocity = poseMsg->header.frame_id == "imu_frame";
 
+	if (isVelocity)
+		ROS_INFO("imu_frame");
+	else
+		ROS_INFO_STREAM("frame: " << poseMsg->header.frame_id);
 
 	// take covariance from sensor
 	// fill the measurement covariance matrix R with the covariance values provided in msg
@@ -146,45 +149,6 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	
 	R.block<6, 6> (0, 0) = eigen_cov;
 	R(6,6) = 1e-6;
-	
-	
-	
-	//  alternatively take fix covariance from reconfigure GUI
-
-	/// yx: if no covariance info in sensor msg, then set use_fixed_covariance to true
-	// if (use_fixed_covariance_)
-	// {
-	// 	const double s_zp = n_zp_ * n_zp_;
-	// 	const double s_zq = n_zq_ * n_zq_;
-
-	// 	/// yx: small value 1e-6 for artificial constraints
-	
-	// 	R = (Eigen::Matrix<double, N_MEAS, 1>() << s_zp, s_zp, s_zp, s_zq, s_zq, s_zq, 1e-6).finished().asDiagonal();
-	// 	// fill the measurement covariance matrix R using the standard deviations n_zp_ (usually for positions) and n_zq_ (usually for attitudes)
-	// }
-
-	// if (!measurement_world_sensor_) // transform the readings and covariance to the sensor reference frame
-	// {
-	// 	Eigen::Matrix<double, 3, 3> C_zq = z_q_.toRotationMatrix();
-	// 	z_q_ = z_q_.conjugate();
-	// 	z_p_ = -C_zq.transpose() * z_p_;
-
-	// 	Eigen::Matrix<double, 6, 6> C_cov(Eigen::Matrix<double, 6, 6>::Zero());
-	// 	C_cov.block<3, 3> (0, 0) = C_zq;
-	// 	C_cov.block<3, 3> (3, 3) = C_zq;
-
-	// 	R.block<6, 6> (0, 0) = C_cov.transpose() * R.block<6, 6> (0, 0) * C_cov;
-	// }
-
-	// feedback for init case
-	// measurements->p_vc_ = z_p_;	// these values are used as current sensor readings for state initialization
-	// measurements->q_cv_ = z_q_;	// these values are used as current sensor readings for state initialization
-
-	// if (!has_measurement)
-	// 	{
-	// 		ROS_INFO("First Measurement Topic Received!");
-	// 		has_measurement = true;
-	// 	}
 
 	// find closest predicted state in time which fits the measurement time
 	ssf_core::State state_old;
@@ -200,14 +164,21 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 		return; // // early abort // //
 	}else{
 		auto diff = state_old.time_ - time_old.toSec();
-		std::cout << _seq << "th measurement frame found state buffer that is " << diff << " seconds from measurement at index " << (int)idx << std::endl;
+		std::cout << std::endl << std::endl <<
+		 _seq << "th measurement frame found state buffer that is " << diff << " seconds from measurement at index " << (int)idx << std::endl;
 	}
 
-	ROS_INFO_STREAM( "\nz_p_" << std::endl << z_p_);
-	ROS_INFO_STREAM( "\nz_q_" << std::endl << z_q_.w() << ", " << z_q_.vec());
-	ROS_INFO_STREAM( "\nR" << std::endl << R );
+	ROS_INFO_STREAM( "\nz_p_ " << z_p_.transpose() << std::endl
+		<< "z_q_ " << z_q_.w() << ", " << z_q_.vec().transpose()
+	);
+	ROS_INFO_STREAM( "\nR" << std::endl << R.diagonal().transpose() );
 
-	ROS_INFO_STREAM( state_old );
+	ROS_INFO_STREAM( "state_old " << state_old );
+
+	ROS_INFO_STREAM( "P_old " << state_old.P_.diagonal().transpose() );
+
+	double theta_dev = 180.0/M_PI*std::acos( 2 * std::pow(z_q_.coeffs().dot(state_old.q_.coeffs()),2.0) - 1.0 );
+	ROS_WARN_STREAM( "theta_dev (deg): " << theta_dev);
 
 	// get rotation matrices
 
@@ -237,11 +208,27 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	H_old.setZero();
 	auto _identity3 = Eigen::Matrix<double, 3, 3>::Identity();
 	// position:
-	H_old.block<3, 3> (0, 0) = _identity3 * state_old.L_; // p
-	// H_old.block<3, 3> (0, 6) = - C_q.transpose() * pci_sk * state_old.L_; // q
-	H_old.block<3, 1> (0, 15) =  state_old.p_; // C_q.transpose() * state_old.p_ci_ + state_old.p_; // L
-	// H_old.block<3, 3> (0, 16) = -C_wv.transpose() * skewold; // q_wv
-	// H_old.block<3, 3> (0, 22) =  C_q.transpose() * state_old.L_; //p_ci
+
+	if (!isVelocity)
+	{
+		//////////////////////////////////
+		// setting zero
+		state_old.v_ << 0,0,0;
+		/////////////////////////
+		H_old.block<3, 3> (0, 0) = _identity3 * state_old.L_; // p
+		// H_old.block<3, 3> (0, 6) = - C_q.transpose() * pci_sk * state_old.L_; // q
+		H_old.block<3, 1> (0, 15) =  state_old.p_; // C_q.transpose() * state_old.p_ci_ + state_old.p_; // L
+		// H_old.block<3, 3> (0, 16) = -C_wv.transpose() * skewold; // q_wv
+		// H_old.block<3, 3> (0, 22) =  C_q.transpose() * state_old.L_; //p_ci
+	}else{
+		Eigen::Matrix<double, 3, 3> R_iw = state_old.q_.toRotationMatrix();
+		Eigen::Matrix<double, 3, 3> v_skew = skew( R_iw.transpose() * state_old.v_);
+
+		H_old.block<3, 3> (0, 3) = R_iw.transpose() * state_old.L_;
+		H_old.block<3, 3> (0, 6) = v_skew * state_old.L_;
+		H_old.block<3, 1> (0, 15) =  R_iw.transpose() * state_old.v_;
+	}
+	
 
 	// attitude
 	H_old.block<3, 3> (3, 6) = _identity3; //C_ci; // q
@@ -252,19 +239,31 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	// construct residuals
 	r_old.setZero();
 	// position
-	r_old.block<3, 1> (0, 0) = z_p_ - state_old.p_ * state_old.L_;
+	if (!isVelocity)
+	{
+		r_old.block<3, 1> (0, 0) = z_p_ - state_old.p_ * state_old.L_;
+	}
+	else
+	{
+		Eigen::Matrix<double, 3, 3> R_iw = state_old.q_.toRotationMatrix();
+		r_old.block<3, 1> (0, 0) = z_p_ - R_iw.transpose() * state_old.v_* state_old.L_;
+
+		if (r_old.block<3, 1> (0, 0).norm() > 0.5)
+			ROS_WARN_STREAM( "BIG VELOCITY CHANGE: " << (r_old.block<3, 1>(0, 0).norm()) );
+		
+		ROS_INFO_STREAM("v_err between z_p_ - v_ in world: " <<  (z_q_.toRotationMatrix() * z_p_ - state_old.v_).transpose()  );
+	}
+
+	
+	
 	// attitude
 	Eigen::Quaternion<double> q_err;
 	q_err = state_old.q_.conjugate() * z_q_;
 	q_err.normalize();
 
-	if (fabs(q_err.w() - 1) > 0.1 && fabs(q_err.w() + 1) > 0.1) // should be a quaternion close to identity
-	{
-		ROS_FATAL_STREAM("\nq_err is not close to identity: " << q_err.w() << ", " << q_err.vec().transpose());
-		exit(1);
-	}
+	ROS_INFO_STREAM("q_err between q_ and z_q_: " << q_err.w() << ", " << q_err.vec().transpose());
 
-	if (q_err.w() > 0)
+	if (q_err.w() > 0.0)
 		r_old.block<3, 1> (3, 0) = q_err.vec() * 2;
 	else
 		r_old.block<3, 1> (3, 0) = - q_err.vec() * 2;
@@ -273,17 +272,64 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	// r_old(6, 0) = -2 * (q_err.w() * q_err.z() + q_err.x() * q_err.y()) / (1 - 2 * (q_err.y() * q_err.y() + q_err.z() * q_err.z()));
 
 	
-	ROS_DEBUG_STREAM_THROTTLE(0.5, "H_old" << std::endl << H_old );
-	ROS_INFO_STREAM_THROTTLE(0.5, "r_old" << std::endl << r_old );
+	ROS_INFO_STREAM( "H_old" << std::endl << H_old );
+	ROS_INFO_STREAM( "r_old" << std::endl << r_old.transpose() );
+
+	//ROS_INFO_STREAM( "P_old" << std::endl << state_old.P_ );
 	
 	// call update step in core class
-	bool result = measurements->ssf_core_.applyMeasurement(idx, H_old, r_old, R, poseMsg->header);
-	if (!result)
-		ROS_WARN("Apply Measurement failed (imu not initialised properly?)");
+
+	bool do_update = true;
+
+	if (R(0,0) > 999)
+	{
+		ROS_WARN("Big Variance Detected");
+		do_update = false;
+	}
+
+	// check v difference
+	if (r_old.block<3, 1>(0, 0).norm() > 10.0)
+	{
+		ROS_WARN_STREAM("Big Velocity Difference Detected: " << (r_old.block<3, 1>(0, 0).norm()) );
+		do_update = false;
+		exit(1);
+	}
+
+	
+	// check q difference
+	if (fabs(q_err.w() - 1) > 0.2 && fabs(q_err.w() + 1) > 0.2)
+	{
+		ROS_FATAL_STREAM("\nq_err is not close to identity: " << q_err.w() << ", " << q_err.vec().transpose());
+		ROS_FATAL_STREAM("Measurement variance: " << R(0,0));
+		do_update = false;
+		exit(1);
+	}
+
+
+	if (do_update)
+	{
+		bool result = measurements->ssf_core_.applyMeasurement(idx, H_old, r_old, R, poseMsg->header);
+		if (!result)
+			ROS_WARN("Apply Measurement failed (imu not initialised properly?)");
+	}
+	else{
+		ROS_WARN("Apply Measurement SKIPED");
+	}
+
+	// double check corrected angle
+
+	double theta_dev_after = 180.0/M_PI*std::acos( 2 * std::pow(z_q_.coeffs().dot(state_old.q_.coeffs()),2.0) - 1.0 );
+	ROS_WARN_STREAM( "after correction theta_dev (deg): " << theta_dev_after);
+
+	if (theta_dev_after / theta_dev > 1.5)
+	{
+		ROS_WARN("BAD Variance");
+		exit(1);
+	}
 
 	// broadcast the calibration as well as posterior pose estimate, to external VO.
-	measurements->ssf_core_.broadcast_ci_transformation(idx,time_old);
-	measurements->ssf_core_.broadcast_iw_transformation(idx,time_old);
+	measurements->ssf_core_.broadcast_ci_transformation(idx,time_old,true);
+	measurements->ssf_core_.broadcast_iw_transformation(idx,time_old,true);
 
-	ROS_DEBUG_STREAM("Processed Measurement and broacased ci & iw transforms " << poseMsg->header.seq);
+	//ROS_DEBUG_STREAM("Processed Measurement and broacased ci & iw transforms " << poseMsg->header.seq);
 }

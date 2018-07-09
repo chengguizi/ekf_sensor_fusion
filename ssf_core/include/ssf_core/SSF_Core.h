@@ -77,6 +77,7 @@ struct ImuInputsCache{
 	Eigen::Matrix<double,3,1> a_m_;         ///< acceleration from IMU
 	//Eigen::Quaternion<double> m_m_;         ///< magnetometer readings 
 	Eigen::Matrix<double,3,1> m_m_;
+	Eigen::Quaternion<double> q_m_;
 };
 
 class SSF_Core
@@ -201,7 +202,7 @@ private:
 	ros::Time global_start_;
 	ros::Time lastImuInputsTime_;
 	
-	const static int imuInputsCache_size = 1024;
+	const static int imuInputsCache_size = 512;
 	struct ImuInputsCache imuInputsCache[imuInputsCache_size];
 	bool isImuCacheReady;
 
@@ -341,6 +342,8 @@ public:
 			S = H_delayed * StateBuffer_[idx_delaystate].P_ * H_delayed.transpose() + R_delayed;
 			K = P * H_delayed.transpose() * S.inverse();
 
+			std::cout << "gain K.diagonal():" << std::endl << K.diagonal().transpose() << std::endl;
+
 			correction_ = K * res_delayed;
 			const ErrorStateCov KH = (ErrorStateCov::Identity() - K * H_delayed);
 			P = KH * P * KH.transpose() + K * R_delayed * K.transpose();
@@ -358,8 +361,8 @@ public:
 			callbacks_.push_back(boost::bind(cb_func, p_obj, _1, _2));
 		}
 
-	void broadcast_ci_transformation(const unsigned char idx, const ros::Time& timestamp);
-	void broadcast_iw_transformation(const unsigned char idx, const ros::Time& timestamp);
+	void broadcast_ci_transformation(const unsigned char idx, const ros::Time& timestamp, bool gotMeasurement = false);
+	void broadcast_iw_transformation(const unsigned char idx, const ros::Time& timestamp, bool gotMeasurement = false);
 };
 
 };// end namespace

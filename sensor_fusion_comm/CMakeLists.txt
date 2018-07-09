@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(sensor_fusion_comm)
 
-find_package(catkin REQUIRED COMPONENTS geometry_msgs message_generation)
+find_package(catkin REQUIRED COMPONENTS roscpp rospy geometry_msgs message_generation)
 
 # Set the build type.  Options are:
 #  Coverage       : w/ debug symbols, w/o optimization, w/ code-coverage
@@ -41,7 +41,7 @@ generate_messages(
 ## LIBRARIES: libraries you create in this project that dependent projects also need
 catkin_package(
     DEPENDS
-    CATKIN_DEPENDS  geometry_msgs
+    CATKIN_DEPENDS  roscpp rospy geometry_msgs message_runtime
     INCLUDE_DIRS # TODO include
     LIBRARIES # TODO
 )
