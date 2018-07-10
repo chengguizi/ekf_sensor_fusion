@@ -303,10 +303,10 @@ void SSF_Core::propagateState(const double dt)
 
 	//std::cout<< "ew_avg:" << ew_avg.transpose() << std::endl; 
 
-	if (ew_avg.norm() < 0.01)
-		ew_avg.setZero();
-	else if (ew_avg.norm() < 0.03)
-		ew_avg = (ew_avg.norm() - 0.01)/0.03 * ew_avg;
+	// if (ew_avg.norm() < 0.01)
+	// 	ew_avg.setZero();
+	// else if (ew_avg.norm() < 0.03)
+	// 	ew_avg = (ew_avg.norm() - 0.01)/0.03 * ew_avg;
 
 
 	Matrix4 OmegaMean = omegaMatJPL(ew_avg);
@@ -348,11 +348,11 @@ void SSF_Core::propagateState(const double dt)
 	dv_without_g = dv - g_;
 
 	// for stationary situration, reset acceleration to zero
-	if (  fabs ( dv_without_g.norm() ) < 0.4 && fabs (dv.norm() - g_.norm()) < 0.2 )
+	if (  fabs ( dv_without_g.norm() ) < 0.3 && fabs (dv.norm() - g_.norm()) < 0.1 )
 	{
-		ROS_INFO_STREAM_THROTTLE(0.25, "Resetting Speed to Zero");
+		ROS_WARN_STREAM_THROTTLE(0.25, "Resetting Speed to 90%");
 		// dv_without_g.setZero();
-		prev_state.v_.setZero();
+		prev_state.v_ = prev_state.v_*( 1 - dt*0.1 );
 	}
 		
 

@@ -272,7 +272,7 @@ public:
 				std::cout << std::endl;
 
 				// can be 0.8, 0.05, 0.002
-				if (max_result.var.a_m_.norm() < 0.05 && max_result.var.w_m_.norm() < 0.001 && max_result.var.m_m_.norm() < 0.05 ) // variance smaller than 0.05 m/s^2
+				if (max_result.var.a_m_.norm() < 0.1 && max_result.var.w_m_.norm() < 0.002 && max_result.var.m_m_.norm() < 0.05 ) // variance smaller than 0.05 m/s^2
 				{
 					// CHECK FOR GRAVITY ESTIMATE
 
@@ -291,7 +291,7 @@ public:
 				}
 					
 			}
-			ros::Duration(1).sleep();
+			ros::Duration(0.25).sleep();
 			ros::spinOnce();
 		}
 
@@ -369,7 +369,7 @@ private:
 		P_.setZero(); // error state covariance; if zero, a default initialization in ssf_core is used
 		double init_np = 0.0;
 		double init_nv = 0.01;
-		double init_nq = 0.1;
+		double init_nq = 0.001;
 		double init_nbw = 0.001;
 		double init_nba = 0.001;
 		double init_L = 0.001;

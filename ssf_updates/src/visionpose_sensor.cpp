@@ -197,6 +197,10 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	double theta_dev = 180.0/M_PI*std::acos( 2 * std::pow(z_q_.coeffs().dot(state_old.q_.coeffs()),2.0) - 1.0 );
 	ROS_WARN_STREAM( "theta_dev (deg): " << theta_dev);
 
+	/////////////////////////////////////
+	/////// RESET VELOCITY
+	// state_old_ptr->v_.setZero();
+
 
 	// get rotation matrices
 
@@ -205,15 +209,6 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	//Eigen::Matrix<double, 3, 3> C_wv = state_old.q_wv_.conjugate().toRotationMatrix(); // hm: C_q{vw}, rotation from world-frame to vision frame
 	// Eigen::Matrix<double, 3, 3> C_q = state_old.q_.conjugate().toRotationMatrix(); // hm: C_q{wi}, rotation from inertial-fram to world-frame
 	// Eigen::Matrix<double, 3, 3> C_ci = state_old.q_ci_.conjugate().toRotationMatrix(); // hm: C_q{ic}, rotation from camera-frame to inertial-frame
-
-
-#ifdef DEBUG_ON
-	std::cout<< "q_wv_" <<std::endl << state_old.q_wv_.coeffs() << std::endl;
-	std::cout<< "q_wv_.conjugate()" <<std::endl << state_old.q_wv_.conjugate().coeffs() << std::endl;
-	std::cout<< "C_wv" <<std::endl << C_wv << std::endl;
-	std::cout<<std::endl;
-#endif
-
 
 // preprocess for elements in H matrix
 	//Eigen::Matrix<double, 3, 1> vecold;
@@ -285,6 +280,8 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 
 	r_old.block<3, 1> (3, 0) = q_err.vec() / q_err.w()  * 2;
 
+	// RESET YAW TO ZERO
+
 
 	// if (q_err.w() > 0.0)
 	// 	r_old.block<3, 1> (3, 0) = q_err.vec() * 2;
@@ -342,9 +339,15 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 		ROS_WARN_STREAM( "after correction theta_dev (deg): " << theta_dev_after);
 		ROS_WARN_STREAM( "theta after: " << state_old_ptr->q_.w() << ", " << state_old_ptr->q_.vec().transpose());
 
-		if (theta_dev_after / theta_dev > 20)
+		if (fabs(theta_dev_after) > 4  && theta_dev_after / theta_dev > 5)
 		{
-			ROS_WARN("BAD Variance of theta");
+			ROS_WARN("BAD Variance of theta (q)");
+			exit(1);
+		}
+
+		if ( (state_old.v_ - state_old_ptr->v_).norm() > 2 )
+		{
+			ROS_WARN("BAD Velocity (v_)");
 			exit(1);
 		}
 	}
