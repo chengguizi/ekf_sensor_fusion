@@ -101,8 +101,8 @@ public:
 			// if there is no magnetometer input, set it to x direction
 			if (imuEstimateMean.m_m_.isZero())
 			{
-				ROS_WARN("There is no magnetometer readings, assume North is in Z-axis");
-				normalvec_m << 0, 0, 1;
+				ROS_WARN("There is no magnetometer readings, assume North is in -Z-axis");
+				normalvec_m << 0, 0, -1;
 			}else{ // there is readings
 				normalvec_m = imuEstimateMean.m_m_.normalized().array();
 			}
