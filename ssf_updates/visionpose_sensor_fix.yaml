@@ -1,3 +1,5 @@
+pose_of_camera_not_imu: true
+
 scale_init: 1.0
 fixed_scale: false
 fixed_bias: false

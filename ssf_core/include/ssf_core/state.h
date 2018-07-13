@@ -95,7 +95,8 @@ public:
 
   /// assembles a PoseWithCovarianceStamped message from the state
   /** it does not set the header */
-  void toPoseMsg(geometry_msgs::PoseWithCovarianceStamped & pose);
+  void toPoseMsg_imu(geometry_msgs::PoseWithCovarianceStamped & pose);
+  void toPoseMsg_camera(geometry_msgs::PoseWithCovarianceStamped & pose);
 
   /// assembles an ExtState message from the state
   /** it does not set the header */

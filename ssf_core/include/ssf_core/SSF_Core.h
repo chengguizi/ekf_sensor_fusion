@@ -208,6 +208,8 @@ private:
 	struct ImuInputsCache imuInputsCache[imuInputsCache_size];
 	bool isImuCacheReady;
 
+	bool _is_pose_of_camera_not_imu;
+
 	//bool predictionMade_;
 
 	/// enables internal state predictions for log replay

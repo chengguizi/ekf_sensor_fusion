@@ -43,6 +43,10 @@ SSF_Core::SSF_Core() : imu_received_(0), mag_received_(0)
 	/// ros stuff
 	ros::NodeHandle nh_local("~");
 
+	nh_local.param("pose_of_camera_not_imu",_is_pose_of_camera_not_imu, false);
+
+	ROS_WARN_STREAM("Output is set to pose of " << ( _is_pose_of_camera_not_imu ? "CAMERA" : "IMU"));
+
 	pubState_ = nh_local.advertise<sensor_fusion_comm::DoubleArrayStamped> ("state_out", 3);
 	//pubCorrect_ = nh.advertise<sensor_fusion_comm::ExtEkf> ("correction", 1);
 	pubPose_ = nh_local.advertise<geometry_msgs::PoseWithCovarianceStamped> ("pose", 3);
@@ -253,7 +257,11 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 
 	State &updated_state = StateBuffer_[(unsigned char)(idx_state_ - 1)];
 
-	updated_state.toPoseMsg(msgPose_);
+	if (_is_pose_of_camera_not_imu)
+		updated_state.toPoseMsg_camera(msgPose_);
+	else
+		updated_state.toPoseMsg_imu(msgPose_);
+
 	pubPose_.publish(msgPose_);
 
 	// publish transforms to help initialising VO
@@ -670,7 +678,10 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 	msgPoseCorrected_.header.stamp = msg_header.stamp;
 	msgPoseCorrected_.header.seq = delaystate.seq_;
 
-	delaystate.toPoseMsg(msgPoseCorrected_);
+	if (_is_pose_of_camera_not_imu)
+		delaystate.toPoseMsg_camera(msgPoseCorrected_);
+	else
+		delaystate.toPoseMsg_imu(msgPoseCorrected_);
 	pubPoseCorrected_.publish(msgPoseCorrected_);
 
 	return 1;

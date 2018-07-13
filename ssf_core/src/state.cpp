@@ -81,10 +81,18 @@ void State::getPoseCovariance(geometry_msgs::PoseWithCovariance::_covariance_typ
 		cov[(i / 3 + 3) * 6 + (i % 3 + 3)] = P_((i / 3 + 6) * N_STATE + (i % 3 + 6));
 }
 
-void State::toPoseMsg(geometry_msgs::PoseWithCovarianceStamped & pose)
+void State::toPoseMsg_imu(geometry_msgs::PoseWithCovarianceStamped & pose)
 {
 	eigen_conversions::vector3dToPoint(p_, pose.pose.pose.position);
 	eigen_conversions::quaternionToMsg(q_, pose.pose.pose.orientation);
+	getPoseCovariance(pose.pose.covariance);
+}
+
+void State::toPoseMsg_camera(geometry_msgs::PoseWithCovarianceStamped & pose)
+{
+	const static Eigen::Quaternion<double> q_calt_c(-0.5,0.5,0.5,0.5); //w,x,y,z . rotation matrix [0 1 0; 0 0 1 ; 1 0 0]
+	eigen_conversions::vector3dToPoint(p_, pose.pose.pose.position);
+	eigen_conversions::quaternionToMsg(q_*q_ci_*q_calt_c, pose.pose.pose.orientation);
 	getPoseCovariance(pose.pose.covariance);
 }
 
