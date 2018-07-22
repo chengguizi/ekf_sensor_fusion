@@ -214,6 +214,8 @@ if __name__ == '__main__':
     ax1.set_ylim(-10,10)
     ax1.set_zlim(-10,10)
 
+    ax1.view_init(elev=-90, azim=0)
+
     lineVO, = ax1.plot([],[],[], linestyle='-',marker='o', color='g', markersize=3)
     lineEKF, = ax1.plot([],[],[], linestyle='-',marker='x', color='b', markersize=3)
 

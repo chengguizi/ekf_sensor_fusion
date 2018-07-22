@@ -11,10 +11,10 @@ fixed_calib: false
 # noise_gyr: 0.005
 # noise_gyrbias: 4.0e-06
 
-noise_acc: 0.01
-noise_accbias: 0.0002
-noise_gyr: 0.001
-noise_gyrbias: 0.000004
+noise_acc: 0.02
+noise_accbias: 0.0004
+noise_gyr: 0.01
+noise_gyrbias: 0.000008
 
 noise_scale: 1.0e-6
 noise_qwv: 0.0

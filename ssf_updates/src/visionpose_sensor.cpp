@@ -326,6 +326,12 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 		exit(1);
 	}
 
+	if ( (state_old.v_ - state_old_ptr->v_).norm() > 3 )
+	{
+		ROS_WARN("BAD Velocity (v_), skipping update");
+		do_update = false;
+	}
+
 
 	if (do_update)
 	{
@@ -344,12 +350,7 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 			ROS_WARN("BAD Variance of theta (q)");
 			exit(1);
 		}
-
-		if ( (state_old.v_ - state_old_ptr->v_).norm() > 2 )
-		{
-			ROS_WARN("BAD Velocity (v_)");
-			exit(1);
-		}
+		
 	}
 	else{
 		ROS_WARN("Apply Measurement SKIPED");
