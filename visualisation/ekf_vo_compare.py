@@ -128,8 +128,8 @@ Statecallback.counter = 0
 
 def update(i):
     mutex.acquire()
-    lines[0].set_data(voz,vox)
-    lines[0].set_3d_properties(voy)
+    lines[0].set_data(vox,voy)
+    lines[0].set_3d_properties(voz)
 
     lines[1].set_data(ekfx,ekfy)
     lines[1].set_3d_properties(ekfz)
