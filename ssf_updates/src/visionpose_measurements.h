@@ -87,9 +87,16 @@ public:
 		ROS_INFO_STREAM("scale_: " << scale_);
 	}
 
-	void initStateZero(struct ssf_core::ImuInputsCache& imuEstimateMean)
+	bool initStateZero(struct ssf_core::ImuInputsCache& imuEstimateMean)
 	{
-		const bool use_imu_internal_q = true;
+		// the sensor's world frame of Ellipse is NED, we are using ENU, therefore conversion is needed.
+		
+		R_sw << 0 , 1 , 0,
+                1 , 0 , 0,
+                0 , 0 , -1;
+
+
+		const bool use_imu_internal_q = false;
 		Eigen::Matrix3d R_wi,R_iw; 
 		if (use_imu_internal_q == false)
 		{
@@ -101,8 +108,8 @@ public:
 			// if there is no magnetometer input, set it to x direction
 			if (imuEstimateMean.m_m_.isZero())
 			{
-				ROS_WARN("There is no magnetometer readings, assume North is in -Z-axis");
-				normalvec_m << 0, 0, -1;
+				ROS_WARN("There is no magnetometer readings, assume North is in +Y-axis");
+				normalvec_m << 0, 1, 0;
 			}else{ // there is readings
 				normalvec_m = imuEstimateMean.m_m_.normalized().array();
 			}
@@ -117,7 +124,7 @@ public:
 			}
 			
 			//// IMPORTANT: gravity direction is straight upwards!
-			g_ << 0, 0, - imuEstimateMean.a_m_.norm() ; // gravity is in z-axis, using NED coordinate
+			
 
 			std::cout << "g_ = " << std::endl << g_.transpose() << std::endl;
 
@@ -146,8 +153,15 @@ public:
 			std::cout << "normalvec_east: " << normalvec_east.transpose() << std::endl;
 			std::cout << "normalvec_down: " << normalvec_down.transpose() << std::endl;
 
-			R_wi << normalvec_north, normalvec_east, normalvec_down;
-			R_iw = R_wi.transpose();
+			Eigen::Matrix3d R_si, R_is;
+			R_si << normalvec_north, normalvec_east, normalvec_down;
+
+			R_wi = R_si * R_sw.transpose();
+
+			R_is = R_si.transpose();
+			R_iw = R_sw * R_is;
+
+			
 			std::cout << "R_iw = " << std::endl << R_iw << std::endl;
 
 			Eigen::Quaternion<double> q_iw(R_iw);
@@ -155,11 +169,13 @@ public:
 		}
 		else{ // use imu internal q
 			ROS_WARN("USING IMU INTERNAL QUATERNION ESTIMATION.");
-			q_iw_ = imuEstimateMean.q_m_;
+			q_iw_ = R_sw * imuEstimateMean.q_m_;
 			R_iw = q_iw_.toRotationMatrix();
 			R_wi = R_iw.transpose();
-			g_ << 0, 0, - imuEstimateMean.a_m_.norm();
 		}
+
+		g_ << 0, 0, imuEstimateMean.a_m_.norm() ; // gravity is in z-axis, using ENU coordinate
+
 		//////////////////////////////////
 		/// Bias Estimation
 		//////////////////////////////////
@@ -172,7 +188,7 @@ public:
 		b_w_ = imuEstimateMean.w_m_.array();
 		//b_w_ << 0, 0, 0;
 
-		init();
+		return init();
 		// global_start is not yet set
 	}
 
@@ -312,6 +328,8 @@ public:
 
 private:
 
+	Eigen::Matrix3d R_sw; // transform between NED and ENU
+
 	Eigen::Matrix<double, 3, 1> p_iw_, v_iw_;
 
 	// Calibration
@@ -332,19 +350,26 @@ private:
 
 	ssf_core::SSF_Core::ErrorStateCov P_;
 
-	void init()
+	bool init()
 	{
-		std::cout << "q_iw_ = " << q_iw_.coeffs().transpose() << std::endl; // x,y,z,w
+		std::cout << "calculated q_iw_ = " << q_iw_.coeffs().transpose() << std::endl; // x,y,z,w
 
-		std::cout << "compared to q_m_" << q_m_.coeffs().transpose() << std::endl;
+		auto q_iw_m_ = Eigen::Quaternion<double>(R_sw)*q_m_;
+		std::cout << "compared to measured R_sw * q_m_" << q_iw_m_.coeffs().transpose() << std::endl;
 
-		assert ( (q_m_.coeffs() - q_iw_.coeffs()).norm() < 0.1 ); // check consistency with IMU's internal state, 10%
+
+		double dev = 180.0/M_PI*std::acos( 2 * std::pow(q_iw_m_.coeffs().dot(q_iw_.coeffs()),2.0) - 1.0 );
+
+		ROS_INFO_STREAM("Deviation Angle = " << dev << "degree");
+		if ( std::abs(dev) > 20 ){ // check consistency with IMU's internal state, 10%
+			ROS_INFO_STREAM("Deviation Angle too big, try again.");
+			return false;
+		} 
 
 		if (q_iw_.norm() == 0) // eigen library convention(x,y,z,w)
 		{
 			ROS_ERROR("q_iw_ is not initialised / estimated properly.");
-			exit(-1);
-			return;
+			return false;
 		}
 
 		std::cout << "b_a_ = " << std::endl << b_a_.transpose() << std::endl;
@@ -353,8 +378,7 @@ private:
 		if (a_m_.isZero() )
 		{
 			ROS_ERROR("a_m_ is not initialised / estimated properly.");
-			exit(-1);
-			return;
+			return false;
 		}
 
 		// initialise world frame to be the first frame of imu frame
@@ -367,15 +391,15 @@ private:
 		//// Constructing initial State Variance
 		/////////////////////////////////////////////
 		P_.setZero(); // error state covariance; if zero, a default initialization in ssf_core is used
-		double init_np = 0.0;
+		double init_np = 0.1;
 		double init_nv = 0.01;
-		double init_nq = 0.001;
-		double init_nbw = 0.001;
-		double init_nba = 0.001;
-		double init_L = 0.001;
-		double init_qwv = 0.0;
-		double init_qci = 0.001;
-		double init_pci = 0.001;
+		double init_nq = 0.0001;
+		double init_nbw = 0.0001;
+		double init_nba = 0.0001;
+		double init_L = 0;
+		double init_qwv = 0;
+		double init_qci = 0;
+		double init_pci = 0;
 		Eigen::Vector3d initvar_p(Eigen::VectorXd::Ones(3)			*	init_np*init_np); // initial position is known
 		Eigen::Vector3d initvar_v(Eigen::VectorXd::Ones(3)			*	init_nv*init_nv); // variance of 1 m/s
 		Eigen::Vector3d initvar_q_err(Eigen::VectorXd::Ones(3)		*	init_nq*init_nq); // TODO: HOW TO ESTIMATE THIS?
@@ -400,6 +424,7 @@ private:
 				<< "\tposition: [" << p_iw_[0] << ", " << p_iw_[1] << ", " << p_iw_[2] << "]" << std::endl
 				<< "\tscale:" << scale_ << std::endl
 				<< "\tattitude (w,x,y,z): [" << q_iw_.w() << ", " << q_iw_.x() << ", " << q_iw_.y() << ", " << q_iw_.z() << "]" << std::endl);
+		return true;
 	}
 };
 

@@ -64,6 +64,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <iostream>
 #include <cmath>
 
+#include <mutex>
+
 #define N_STATE_BUFFER 256	///< size of unsigned char, do not change!
 #define HLI_EKF_STATE_SIZE 16 	///< number of states exchanged with external propagation. Here: p,v,q,bw,bw=16
 
@@ -97,7 +99,7 @@ public:
 									const Eigen::Quaternion<double> & q_ci, const Eigen::Matrix<double, 3, 1> & p_ci);
 
 	/// retreive all state information at time t. Used to build H, residual and noise matrix by update sensors
-	unsigned char getClosestState(State*& timestate, ros::Time tstamp, double delay = 0.00);
+	bool getClosestState(State*& timestate, ros::Time tstamp, double delay, unsigned char &idx);
 
 	/// get all state information at a given index in the ringbuffer
 	//bool getStateAtIdx(State* timestate, unsigned char idx);
@@ -122,6 +124,7 @@ public:
 			if (idx_state_ != 1)
 			{
 				std::cerr << "ERROR: global_start_ should be set only after State zero initilisation" << std::endl;
+				exit(-1);
 				return;
 			}
 			global_start_ = global_start;
@@ -148,6 +151,9 @@ public:
 	~SSF_Core();
 
 private:
+
+	std::mutex core_mutex;
+
 	ros::WallTimer check_synced_timer_;
 	int imu_received_, mag_received_, all_received_;
 	static void increment(int* value)
@@ -204,7 +210,7 @@ private:
 	ros::Time global_start_;
 	ros::Time lastImuInputsTime_;
 	
-	const static int imuInputsCache_size = 256;
+	const static int imuInputsCache_size = 64;
 	struct ImuInputsCache imuInputsCache[imuInputsCache_size];
 	bool isImuCacheReady;
 
@@ -317,6 +323,10 @@ private:
 	}
 
 public:
+
+	void mutexLock(){core_mutex.lock();}
+
+	void mutexUnlock(){core_mutex.unlock();}
 	// some header implementations
 
 	/// main update routine called by a given sensor
@@ -343,6 +353,8 @@ public:
 			Eigen::Matrix<double, N_STATE, R_type::RowsAtCompileTime> K;
 			ErrorStateCov & P = StateBuffer_[idx_delaystate].P_;
 
+			std::cout << "P before update: " << std::endl << P.diagonal().transpose() << std::endl;
+
 			S = H_delayed * StateBuffer_[idx_delaystate].P_ * H_delayed.transpose() + R_delayed;
 			K = P * H_delayed.transpose() * S.inverse();
 
@@ -354,6 +366,8 @@ public:
 
 			// make sure P stays symmetric
 			P = 0.5 * (P + P.transpose());
+
+			std::cout << "P after update: " << std::endl << P.diagonal().transpose() << std::endl;
 
 			return applyCorrection(idx_delaystate, correction_, fuzzythres, msg_header);
 		}

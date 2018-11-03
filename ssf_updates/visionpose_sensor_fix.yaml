@@ -1,9 +1,9 @@
-pose_of_camera_not_imu: true
+pose_of_camera_not_imu: false
 
 scale_init: 1.0
-fixed_scale: false
+fixed_scale: true
 fixed_bias: false
-fixed_calib: false
+fixed_calib: true
 
 # for visensor imu
 # noise_acc: 0.01
@@ -11,32 +11,37 @@ fixed_calib: false
 # noise_gyr: 0.005
 # noise_gyrbias: 4.0e-06
 
-noise_acc: 0.02
-noise_accbias: 0.0004
+noise_acc: 1
+noise_accbias: 0.005
 noise_gyr: 0.01
-noise_gyrbias: 0.000008
+noise_gyrbias:  0.00001
 
-noise_scale: 1.0e-6
+noise_scale: 0
 noise_qwv: 0.0
-noise_qci: 0.0001
-noise_pic: 0.0001
+noise_qci: 0.0
+noise_pic: 0.0
 delay: 0.00
 
 # for visensor measurement
 # meas_noise1: 0.1
-# meas_noise2: 0.17
+meas_noise2: 0.1
 
 #data_playback: true
 
 # initialization of camera w.r.t. IMU
 init/q_ci/w: 0
 init/q_ci/x: 0
-init/q_ci/y: 1 # y points to the ground, x points to the left, z points back
-init/q_ci/z: 0
+init/q_ci/y: 0.7071067812 # y points to the ground, x points to the left, z points back
+init/q_ci/z: 0.7071067812
 
-init/p_ci/x: 0.045  
-init/p_ci/y: -0.035
-init/p_ci/z: 0.005
+# -1     0     0
+#  0     0     1
+#  0     1     0
+
+
+init/p_ci/x: 0.035  
+init/p_ci/y: -0.05
+init/p_ci/z: 0
 
 # initializaton of world w.r.t. vision
 init/q_wv/w: 1.0

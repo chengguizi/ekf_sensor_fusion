@@ -55,8 +55,8 @@ SSF_Core::SSF_Core() : imu_received_(0), mag_received_(0)
 
 	msgState_.data.resize(nFullState_ + N_STATE, 0);
 
-	subImu_.subscribe(nh_local,"imu_state_input", N_STATE_BUFFER);
-	subMag_.subscribe(nh_local,"mag_state_input", N_STATE_BUFFER);
+	subImu_.subscribe(nh_local,"imu_state_input", 20);
+	subMag_.subscribe(nh_local,"mag_state_input", 20);
 
 	subImu_.registerCallback(boost::bind(SSF_Core::increment, &imu_received_));
 	subMag_.registerCallback(boost::bind(SSF_Core::increment, &mag_received_));
@@ -113,7 +113,7 @@ void SSF_Core::initialize(const Eigen::Matrix<double, 3, 1> & p, const Eigen::Ma
 	state.p_ci_ = p_ci;
 	 
 	state.q_int_ = q; //state.q_wv_;
-	state.p_int_ = p;
+	state.p_int_ = p; // this is the pure imu integration, without update
 	state.w_m_ = w_m;
 	state.a_m_ = a_m;
 	state.m_m_ = m_m;
@@ -154,6 +154,7 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 	imuInputsCache_ptr->m_m_ << msg_mag->magnetic_field.x, msg_mag->magnetic_field.y, msg_mag->magnetic_field.z;
 	imuInputsCache_ptr->q_m_ = Eigen::Quaternion<double>(msg->orientation.w, msg->orientation.x, msg->orientation.y, msg->orientation.z); 
 
+	// make sure the q from IMU measurement is valid
 	assert( fabs(imuInputsCache_ptr->q_m_.norm() - 1.0) < 1e-2 );
 	imuInputsCache_ptr->q_m_.normalize();
 
@@ -182,12 +183,12 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 	if (lastImuInputsTime_.isZero())
 		ROS_INFO("imuCallback(): First IMU inputs received!");
 	
+	// keep track of the last input time
 	lastImuInputsTime_ = msg->header.stamp;
 
-	if (global_start_.isZero()) // global_start_ will be initialised by imuCallback
+	if (global_start_.isZero()) // enter calibration mode, not ekf mode yet
 	{
-		// ROS_ASSERT(idx_state_ == 1);
-		StateBuffer_[0].time_ = lastImuInputsTime_.toSec();
+		StateBuffer_[0].time_ = msg->header.stamp.toSec();
 		ROS_WARN_THROTTLE(1,"IMU data received but global_start_ is yet to be initialised, setting initial timestamp to most recent IMU readings");
 		return; // // early abort // //
 	}else if (global_start_ > msg->header.stamp)
@@ -196,8 +197,16 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 		return;
 	}
 
+	////////////////////////////////////////////////////////////
+	///// Mutex start
+	////////////////////////////////////////////////////////////
+
+	mutexLock();
+
 	// construct new input state
 	StateBuffer_[idx_state_].time_ = msg->header.stamp.toSec();
+
+	// std::cout << "msg->header.stamp = " << msg->header.stamp.toNSec() << ", state = " << (unsigned int)idx_state_ << std::endl;
 
 	// get inputs
 	StateBuffer_[idx_state_].a_m_ << msg->linear_acceleration.x, msg->linear_acceleration.y, msg->linear_acceleration.z;
@@ -233,10 +242,13 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 		last_wm = StateBuffer_[idx_state_].w_m_;
 
 
-	if (fabs(StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_) > 1.0)
+	if (std::abs(StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_) > 0.5)
 	{
-		ROS_ERROR_STREAM("large time-gap detected, resetting previous state to current state time.");
+		ROS_ERROR_STREAM("large time-gap detected, resetting previous state to current state time: "
+		 << (long long)(StateBuffer_[idx_state_].time_ * 1e9) << ", " << 
+		 (long long)(StateBuffer_[(unsigned char)(idx_state_ - 1)].time_ * 1e9) << ", state = " << (unsigned int)idx_state_ << "abs = " << std::abs(StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_) << "normal = " << StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_);
 		StateBuffer_[(unsigned char)(idx_state_ - 1)].time_ = StateBuffer_[(idx_state_)].time_;
+		exit(-1);
 	}
 
 	propagateState(StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_); 
@@ -265,18 +277,27 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 	pubPose_.publish(msgPose_);
 
 	// publish transforms to help initialising VO
-	broadcast_ci_transformation((unsigned char)(idx_state_ - 1),msgPose_.header.stamp);
-	broadcast_iw_transformation((unsigned char)(idx_state_ - 1),msgPose_.header.stamp);
+	// broadcast_ci_transformation((unsigned char)(idx_state_ - 1),msgPose_.header.stamp);
+	// broadcast_iw_transformation((unsigned char)(idx_state_ - 1),msgPose_.header.stamp);
 
 	// std::cout << updated_state << std::endl;
 
 	double theta_dev = 180.0/M_PI*std::acos( 2 * std::pow(initial_q_.coeffs().dot(updated_state.q_.coeffs()),2.0) - 1.0 );
-	ROS_INFO_STREAM_THROTTLE(1, "theta_dev (deg): " << theta_dev << std::endl
-		 << "P diagonal(): " << std::endl << updated_state.P_.diagonal().transpose() << std::endl);
+	ROS_INFO_STREAM_THROTTLE(0.5, "angle deviation from the initial q_ (deg): " << theta_dev );
+		//  << "P diagonal(): " << std::endl << updated_state.P_.diagonal().transpose() << std::endl);
 
+	ROS_INFO_STREAM_THROTTLE(0.5, std::endl << "predict v: " << StateBuffer_[(unsigned char)(idx_state_ - 1)].v_.transpose() 
+		<< std::endl << "predict p" << StateBuffer_[(unsigned char)(idx_state_ - 1)].p_.transpose() );
 	// msgPoseCtrl_.header = msgPose_.header;
 	// StateBuffer_[(unsigned char)(idx_state_ - 1)].toExtStateMsg(msgPoseCtrl_);
 	//pubPoseCrtl_.publish(msgPoseCtrl_);
+
+
+	//////////////////////////////////////////////////////////////
+	//////// mutex end
+	//////////////////////////////////////////////////////////////
+	mutexUnlock();
+	
 }
 
 
@@ -356,12 +377,12 @@ void SSF_Core::propagateState(const double dt)
 	dv_without_g = dv - g_;
 
 	// for stationary situration, reset acceleration to zero
-	if (  fabs ( dv_without_g.norm() ) < 0.3 && fabs (dv.norm() - g_.norm()) < 0.1 )
-	{
-		ROS_WARN_STREAM_THROTTLE(0.25, "Resetting Speed to 90%");
-		// dv_without_g.setZero();
-		prev_state.v_ = prev_state.v_*( 1 - dt*0.1 );
-	}
+	// if (  fabs ( dv_without_g.norm() ) < 0.3 && fabs (dv.norm() - g_.norm()) < 0.1 )
+	// {
+	// 	ROS_WARN_STREAM_THROTTLE(0.25, "Resetting Speed to 90%");
+	// 	// dv_without_g.setZero();
+	// 	prev_state.v_ = prev_state.v_*( 1 - dt*0.1 );
+	// }
 		
 
 	ROS_INFO_STREAM_THROTTLE(1, "\ndv-g based on current: " << (cur_state.q_.toRotationMatrix() * ea  - g_).transpose() << std::endl
@@ -370,8 +391,8 @@ void SSF_Core::propagateState(const double dt)
 
 	cur_state.v_ = prev_state.v_ + dv_without_g * dt; // dv is world coordinate accerlation
 
-	// TO PREVENT DRIFT, TRY MAKING THINGS SMALLER
-	cur_state.v_ = cur_state.v_*(1.0 - dt*1e-1);
+	// // TO PREVENT DRIFT, TRY MAKING THINGS SMALLER
+	// cur_state.v_ = cur_state.v_*(1.0 - dt*1e-1);
 
 	cur_state.p_ = prev_state.p_ + ((cur_state.v_ + prev_state.v_) / 2.0 * dt);
 	cur_state.p_int_ = prev_state.p_int_ + ((cur_state.v_ + prev_state.v_) / 2.0 * dt);
@@ -486,7 +507,7 @@ void SSF_Core::predictProcessCovariance(const double dt)
 // 	return true;
 // }
 
-unsigned char SSF_Core::getClosestState(State*& timestate, ros::Time tstamp, double delay)
+bool SSF_Core::getClosestState(State*& timestate, ros::Time tstamp, double delay, unsigned char &idx)
 {  
 	// if (!predictionMade_)
 	// {
@@ -495,21 +516,32 @@ unsigned char SSF_Core::getClosestState(State*& timestate, ros::Time tstamp, dou
 	// 	return false;
 	// }
 
-	unsigned char idx = (unsigned char)(idx_state_ - 1);
+	idx = (unsigned char)(idx_state_ - 1);
 	double timedist = 1e100;
 	double timenow = tstamp.toSec() - delay - config_.delay; // delay is zero by default
+
+
+	// vo shouldn't be ahead of imu inputs
+	if(StateBuffer_[idx].time_ < timenow){
+		ROS_WARN("VO Ahead of IMU");
+		return false;
+	}
 
 	while (fabs(timenow - StateBuffer_[idx].time_) < timedist) // timedist decreases continuously until best point reached... then rises again
 	{
 		timedist = fabs(timenow - StateBuffer_[idx].time_);
 		idx--; // hm: beyond 0, will automatically become 255
 	}
+	if (idx == (unsigned char)(idx_state_ - 1)){
+		std::cout << "getClosestState(), buffer overrun, no match possible" << std::endl;
+		return false;
+	}
 	idx++; // we subtracted one too much before....
 
-	// static bool started = false;
-	// if (idx == 1 && !started)
-	// 	idx = 2;
-	// started = true;
+	static bool started = false;
+	if (idx == 1 && !started)
+		idx = 2;
+	started = true;
 
 	if (StateBuffer_[idx].time_ == 0)
 	{
@@ -522,7 +554,7 @@ unsigned char SSF_Core::getClosestState(State*& timestate, ros::Time tstamp, dou
 
 	timestate = &(StateBuffer_[idx]);
 
-	return idx;
+	return true;
 }
 
 void SSF_Core::propPToIdx(unsigned char idx)
@@ -562,7 +594,7 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 		correction_(24) = 0; //p_ci z
 	}
 
-	assert( !( config_.fixed_scale || config_.fixed_bias || config_.fixed_calib ) );
+	// assert( !( config_.fixed_scale || config_.fixed_bias || config_.fixed_calib ) );
 
 	ROS_WARN_STREAM("\ncorrection_ " << correction_.transpose() );
 	// state update:
@@ -647,6 +679,8 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 	}
 
 	// idx fiddeling to ensure correct update until now from the past
+
+	assert(idx_state_ != idx_delaystate);
 	idx_time_ = idx_state_;
 	idx_state_ = idx_delaystate + 1; // reset current state back in time, to be the one after the corrected state
 	idx_P_ = idx_delaystate + 1;
@@ -664,6 +698,8 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
  
 	assert(checkForNumeric(&correction_[0], HLI_EKF_STATE_SIZE, "update"));
 
+
+	ROS_WARN_STREAM("applyCorrection(): now at state time = " << (long long)(StateBuffer_[(unsigned char)(idx_state_ - 1)].time_ * 1e9) << ", state = " << (unsigned int)(idx_state_-1));
 
 	// publish state
 	const unsigned char idx = (unsigned char)(idx_state_ - 1); // Hm: This is the most recent idx, with IMU

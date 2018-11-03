@@ -47,7 +47,7 @@ protected:
 	ReconfigureServer *reconfServer_;
 
 	void Config(ssf_core::SSF_CoreConfig &config, uint32_t level);
-	virtual	void init() = 0;
+	virtual	bool init() = 0;
 
 public:
 

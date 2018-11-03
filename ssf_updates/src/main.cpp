@@ -44,10 +44,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <std_srvs/Empty.h>
 
+
 int main(int argc, char** argv)
 {
-	ros::init(argc, argv, "ekf_odometer");
-	ros::NodeHandle nh("~");
+	ros::init(argc, argv, "ekf_fusion");
+	ros::NodeHandle nh;
+	ros::NodeHandle local_nh("~");
+
+	ros::Publisher _reset_pub;
+	_reset_pub = nh.advertise<std_msgs::Header>("/reset",3);
 
 #ifdef POSE_MEAS
 	PoseMeasurements PoseMeas;
@@ -85,51 +90,47 @@ int main(int argc, char** argv)
 
 	ROS_INFO_STREAM(""<< topicsStr);
 
-	// STEP 1, Wait for IMU input to be available, stabilised
-	struct ssf_core::ImuInputsCache imuEstimateMean;
-	VisionPoseMeas.initialiseIMU(imuEstimateMean);
+	ros::AsyncSpinner spinner(2);
 
-	// STEP 2, Initialise State Zero with State at origin and fake IMU Input
-	VisionPoseMeas.initStateZero(imuEstimateMean);
+	// ROS_INFO("Waiting for reset signal...");
+	// auto msgptr = ros::topic::waitForMessage<std_msgs::Header>("/reset",nh);
+
+	ros::Duration(2).sleep(); // wait for setup of network connection with other nodes
+
+	std_msgs::Header header;
+	header.stamp = ros::Time::now();
+	_reset_pub.publish(header);
+	ros::spinOnce();
 
 	
+	while(ros::ok()){
+		spinner.start();
+		while (ros::ok() && true){
+			// STEP 1, Wait for IMU input to be available, stabilised
+			struct ssf_core::ImuInputsCache imuEstimateMean;
+			VisionPoseMeas.initialiseIMU(imuEstimateMean);
 
-	// STEP 3, Wait for VO node to have incoming images and publishing pose topic
-	std::string vo_topic_str = "/stereo_odometer/pose";
-	while (ros::ok())
-	{
-		ROS_INFO_STREAM("Waiting for messages from topic " << vo_topic_str);
-		auto ptr = ros::topic::waitForMessage<geometry_msgs::PoseWithCovarianceStamped>( vo_topic_str, ros::Duration(0.5) );
+			// STEP 2, Initialise State Zero with State at origin and fake IMU Input
+			if (VisionPoseMeas.initStateZero(imuEstimateMean))
+				break;
 
-		if (!ptr)
-			ROS_ERROR_THROTTLE(2,"No messages from the topic, check the VO node availability.");
-		else
-		{
-			ROS_INFO("VO messages are detected, triggering EKF initialisation...");
-			break;
+			ros::Duration(0.5).sleep();
 		}
-		ros::spinOnce();
-	}
 
-	// STEP 4, Broadcast Initial calibration
-	// VisionPoseMeas.boardcastInitialCalibration();
-	// ros::spinOnce();
+		ros::Time global_start = VisionPoseMeas.setGlobalStart();
+		ROS_INFO_STREAM("==============Global Start Time: " << std::fixed <<  global_start <<"==============");
+		// Reset VO integration to identity, therefore enable Measurement Callback
 
-	// STEP 5, set global start (which checks if IMU inputs has arrived), trigger VO node on global start as well
-	ros::Time global_start = VisionPoseMeas.setGlobalStart();
-	ROS_INFO("==========Enable IMU Callback for Prediction EKF==============");
-	ROS_INFO_STREAM("==============Global Start Time: " << std::fixed <<  global_start <<"==============");
-	// Reset VO integration to identity, therefore enable Measurement Callback
-	ros::ServiceClient vo_client = nh.serviceClient<std_srvs::Empty>("/stereo_odometer/reset_pose");
-	std_srvs::Empty srv;
-	if (!vo_client.call(srv))
-	{
-		ROS_ERROR("Fail to call stereo_odometer/reset_pose");
-	}
-	ROS_WARN_STREAM("Done resetting VO integration, time: " << ros::Time::now());
 
-	ROS_INFO("main(): initialisation done, ROS spinning");
-	ros::spin();
+		
+
+		// ROS_WARN_STREAM("Done resetting VO integration, time: " << ros::Time::now());
+		
+		auto msgptr = ros::topic::waitForMessage<std_msgs::Header>("/reset",nh);
+		spinner.stop();
+		ROS_INFO("In-process RESET detected, restarting...");
+	} // end of ros ok
+	
 
 	return 0;
 }
