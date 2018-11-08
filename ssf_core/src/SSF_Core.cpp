@@ -51,6 +51,7 @@ SSF_Core::SSF_Core() : imu_received_(0), mag_received_(0)
 	//pubCorrect_ = nh.advertise<sensor_fusion_comm::ExtEkf> ("correction", 1);
 	pubPose_ = nh_local.advertise<geometry_msgs::PoseWithCovarianceStamped> ("pose", 3);
 	pubPoseCorrected_ = nh_local.advertise<geometry_msgs::PoseWithCovarianceStamped> ("pose_corrected", 3);
+	pubIntPose_ = nh_local.advertise<geometry_msgs::PoseWithCovarianceStamped> ("pose_integrated", 3);
 	//pubPoseCrtl_ = nh.advertise<sensor_fusion_comm::ExtState> ("ext_state", 1);
 
 	msgState_.data.resize(nFullState_ + N_STATE, 0);
@@ -114,6 +115,10 @@ void SSF_Core::initialize(const Eigen::Matrix<double, 3, 1> & p, const Eigen::Ma
 	 
 	state.q_int_ = q; //state.q_wv_;
 	state.p_int_ = p; // this is the pure imu integration, without update
+	state.v_int_ = v;
+
+	msgIntPose_.header.seq = 0;
+	msgIntPose_.header.stamp = ros::Time(0);
 	state.w_m_ = w_m;
 	state.a_m_ = a_m;
 	state.m_m_ = m_m;
@@ -282,9 +287,9 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 
 	// std::cout << updated_state << std::endl;
 
-	double theta_dev = 180.0/M_PI*std::acos( 2 * std::pow(initial_q_.coeffs().dot(updated_state.q_.coeffs()),2.0) - 1.0 );
-	ROS_INFO_STREAM_THROTTLE(0.5, "angle deviation from the initial q_ (deg): " << theta_dev );
-		//  << "P diagonal(): " << std::endl << updated_state.P_.diagonal().transpose() << std::endl);
+	// double theta_dev = 180.0/M_PI*std::acos( 2 * std::pow(initial_q_.coeffs().dot(updated_state.q_.coeffs()),2.0) - 1.0 );
+	// ROS_INFO_STREAM_THROTTLE(0.5, "angle deviation from the initial q_ (deg): " << theta_dev );
+	// 	//  << "P diagonal(): " << std::endl << updated_state.P_.diagonal().transpose() << std::endl);
 
 	ROS_INFO_STREAM_THROTTLE(0.5, std::endl << "predict v: " << StateBuffer_[(unsigned char)(idx_state_ - 1)].v_.transpose() 
 		<< std::endl << "predict p" << StateBuffer_[(unsigned char)(idx_state_ - 1)].p_.transpose() );
@@ -300,31 +305,12 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 	
 }
 
+Eigen::Matrix<double, 4, 4> compute_delta_q(const Eigen::Matrix<double, 3, 1> &ew, const Eigen::Matrix<double, 3, 1> &ewold, double dt){
 
-void SSF_Core::propagateState(const double dt)
-{
 	typedef const Eigen::Matrix<double, 4, 4> ConstMatrix4;
 	typedef const Eigen::Matrix<double, 3, 1> ConstVector3;
 	typedef Eigen::Matrix<double, 4, 4> Matrix4;
 
-	// get references to current and previous state
-	State & cur_state = StateBuffer_[idx_state_];
-	State & prev_state = StateBuffer_[(unsigned char)(idx_state_ - 1)];
-
-	// zero props:
-	cur_state.b_w_ = prev_state.b_w_;
-	cur_state.b_a_ = prev_state.b_a_;
-	cur_state.L_ = prev_state.L_;
-	cur_state.q_wv_ = prev_state.q_wv_;
-	cur_state.q_ci_ = prev_state.q_ci_;
-	cur_state.p_ci_ = prev_state.p_ci_;
-
-//  Eigen::Quaternion<double> dq;
-	Eigen::Matrix<double, 3, 1> dv, dv_without_g;
-	ConstVector3 ew = cur_state.w_m_ - cur_state.b_w_;
-	ConstVector3 ewold = prev_state.w_m_ - prev_state.b_w_;
-	ConstVector3 ea = cur_state.a_m_ - cur_state.b_a_; // estimated acceleration of current state
-	ConstVector3 eaold = prev_state.a_m_ - prev_state.b_a_; // estimated acceleration of previous state
 	ConstMatrix4 Omega = omegaMatJPL(ew);
 	ConstMatrix4 OmegaOld = omegaMatJPL(ewold);
 
@@ -358,6 +344,40 @@ void SSF_Core::propagateState(const double dt)
 	// first oder quat integration matrix
 	ConstMatrix4 quat_int = MatExp + 1.0 / 48.0 * (Omega * OmegaOld - OmegaOld * Omega) * dt * dt;
 
+	return quat_int;
+} 
+
+
+void SSF_Core::propagateState(const double dt)
+{
+	typedef const Eigen::Matrix<double, 4, 4> ConstMatrix4;
+	typedef const Eigen::Matrix<double, 3, 1> ConstVector3;
+	typedef Eigen::Matrix<double, 4, 4> Matrix4;
+
+	// get references to current and previous state
+	State & cur_state = StateBuffer_[idx_state_];
+	State & prev_state = StateBuffer_[(unsigned char)(idx_state_ - 1)];
+
+	// zero props:
+	cur_state.b_w_ = prev_state.b_w_;
+	cur_state.b_a_ = prev_state.b_a_;
+	cur_state.L_ = prev_state.L_;
+	cur_state.q_wv_ = prev_state.q_wv_;
+	cur_state.q_ci_ = prev_state.q_ci_;
+	cur_state.p_ci_ = prev_state.p_ci_;
+
+//  Eigen::Quaternion<double> dq;
+	Eigen::Matrix<double, 3, 1> dv, dv_int, dv_without_g, dv_without_g_int;
+	ConstVector3 ew = cur_state.w_m_ - cur_state.b_w_;
+	ConstVector3 ewold = prev_state.w_m_ - prev_state.b_w_;
+	ConstVector3 ea = cur_state.a_m_ - cur_state.b_a_; // estimated acceleration of current state
+	ConstVector3 eaold = prev_state.a_m_ - prev_state.b_a_; // estimated acceleration of previous state
+
+
+	auto quat_int = compute_delta_q(ew,ewold,dt);
+
+	// auto quat_int_int_ = compute_delta_q(cur_state.w_m_, prev_state.w_m_ , dt);
+
 	// first oder quaternion integration
 	cur_state.q_.coeffs() = quat_int * prev_state.q_.coeffs();
 	cur_state.q_.normalize();
@@ -366,7 +386,7 @@ void SSF_Core::propagateState(const double dt)
 	// cur_state.q_ = cur_state.q_m_;
 
 	// first oder quaternion integration
-	cur_state.q_int_.coeffs() = quat_int * prev_state.q_int_.coeffs();
+	cur_state.q_int_.coeffs() = quat_int * prev_state.q_int_.coeffs(); // quat_int_int_
 	cur_state.q_int_.normalize();
 	
 	// DEBUG
@@ -374,7 +394,13 @@ void SSF_Core::propagateState(const double dt)
 
 	// hm: this part shows that C(q_) is a passive transformation from imu to world frame
 	dv = (cur_state.q_.toRotationMatrix() * ea + prev_state.q_.toRotationMatrix() * eaold) / 2.0;
+
+	//dv_int = (cur_state.q_int_.toRotationMatrix() * ea + prev_state.q_int_.toRotationMatrix() * eaold) / 2.0;
+	dv_int = (cur_state.q_int_.toRotationMatrix() * cur_state.a_m_ + prev_state.q_int_.toRotationMatrix() * prev_state.a_m_) / 2.0;
+	
+	
 	dv_without_g = dv - g_;
+	dv_without_g_int = dv_int - g_;
 
 	// for stationary situration, reset acceleration to zero
 	// if (  fabs ( dv_without_g.norm() ) < 0.3 && fabs (dv.norm() - g_.norm()) < 0.1 )
@@ -390,12 +416,26 @@ void SSF_Core::propagateState(const double dt)
 	 	<< "v change:" << (dv_without_g * dt).transpose() );
 
 	cur_state.v_ = prev_state.v_ + dv_without_g * dt; // dv is world coordinate accerlation
+	cur_state.v_int_ = prev_state.v_int_ + dv_without_g_int * dt;
 
 	// // TO PREVENT DRIFT, TRY MAKING THINGS SMALLER
 	// cur_state.v_ = cur_state.v_*(1.0 - dt*1e-1);
 
 	cur_state.p_ = prev_state.p_ + ((cur_state.v_ + prev_state.v_) / 2.0 * dt);
-	cur_state.p_int_ = prev_state.p_int_ + ((cur_state.v_ + prev_state.v_) / 2.0 * dt);
+	cur_state.p_int_ = prev_state.p_int_ + ((cur_state.v_int_ + prev_state.v_int_) / 2.0 * dt);
+
+
+	///// PUBLISH PURE INTEGRATED STATE FOR DEBUG
+
+	ros::Time state_time;
+	state_time.fromSec(cur_state.time_);
+
+	if (state_time > msgIntPose_.header.stamp){ // publish new stuff
+		msgIntPose_.header.stamp = state_time;
+		cur_state.toIntPoseMsg(msgIntPose_);
+		pubIntPose_.publish(msgIntPose_);
+	}
+	
 
 	
 	idx_state_++;  // hm: unsigned char, so will automatically become a ring buffer
@@ -507,7 +547,7 @@ void SSF_Core::predictProcessCovariance(const double dt)
 // 	return true;
 // }
 
-bool SSF_Core::getClosestState(State*& timestate, ros::Time tstamp, double delay, unsigned char &idx)
+ClosestStateStatus SSF_Core::getClosestState(State*& timestate, ros::Time tstamp, double delay, unsigned char &idx)
 {  
 	// if (!predictionMade_)
 	// {
@@ -524,7 +564,7 @@ bool SSF_Core::getClosestState(State*& timestate, ros::Time tstamp, double delay
 	// vo shouldn't be ahead of imu inputs
 	if(StateBuffer_[idx].time_ < timenow){
 		ROS_WARN("VO Ahead of IMU");
-		return false;
+		return TOO_EARLY;
 	}
 
 	while (fabs(timenow - StateBuffer_[idx].time_) < timedist) // timedist decreases continuously until best point reached... then rises again
@@ -533,8 +573,8 @@ bool SSF_Core::getClosestState(State*& timestate, ros::Time tstamp, double delay
 		idx--; // hm: beyond 0, will automatically become 255
 	}
 	if (idx == (unsigned char)(idx_state_ - 1)){
-		std::cout << "getClosestState(), buffer overrun, no match possible" << std::endl;
-		return false;
+		ROS_WARN( "getClosestState(), buffer overrun, no match possible" );
+		return TOO_OLD;
 	}
 	idx++; // we subtracted one too much before....
 
@@ -545,16 +585,16 @@ bool SSF_Core::getClosestState(State*& timestate, ros::Time tstamp, double delay
 
 	if (StateBuffer_[idx].time_ == 0)
 	{
-		std::cout  << "getClosestState(): too far in past" << std::endl;
+		ROS_WARN( "getClosestState(): hit time zero, buffer not full yet?" );
 		//timestate->time_ = -1; // hm: add to make sure -1 logic condition holds for all failure cases
-		return false; // // early abort // //  not enough predictions made yet to apply measurement (too far in past)
+		return TOO_OLD; // // early abort // //  not enough predictions made yet to apply measurement (too far in past)
 	}
 
 	propPToIdx(idx); // catch up with covariance propagation if necessary
 
 	timestate = &(StateBuffer_[idx]);
 
-	return true;
+	return FOUND;
 }
 
 void SSF_Core::propPToIdx(unsigned char idx)
@@ -719,6 +759,7 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 	else
 		delaystate.toPoseMsg_imu(msgPoseCorrected_);
 	pubPoseCorrected_.publish(msgPoseCorrected_);
+
 
 	return 1;
 }

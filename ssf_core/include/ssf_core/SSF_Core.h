@@ -82,6 +82,12 @@ struct ImuInputsCache{
 	Eigen::Quaternion<double> q_m_;
 };
 
+enum ClosestStateStatus{
+	TOO_OLD,
+	TOO_EARLY,
+	FOUND
+};
+
 class SSF_Core
 {
 
@@ -99,7 +105,7 @@ public:
 									const Eigen::Quaternion<double> & q_ci, const Eigen::Matrix<double, 3, 1> & p_ci);
 
 	/// retreive all state information at time t. Used to build H, residual and noise matrix by update sensors
-	bool getClosestState(State*& timestate, ros::Time tstamp, double delay, unsigned char &idx);
+	ClosestStateStatus getClosestState(State*& timestate, ros::Time tstamp, double delay, unsigned char &idx);
 
 	/// get all state information at a given index in the ringbuffer
 	//bool getStateAtIdx(State* timestate, unsigned char idx);
@@ -241,6 +247,9 @@ private:
 
 	ros::Publisher pubPoseCorrected_; ///< HM: publishes 6DoF pose output, after each applyCorrection
 	geometry_msgs::PoseWithCovarianceStamped msgPoseCorrected_;
+
+	ros::Publisher pubIntPose_;
+	geometry_msgs::PoseWithCovarianceStamped msgIntPose_;
 
 	tf2_ros::TransformBroadcaster tf_broadcaster_;
 

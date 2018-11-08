@@ -96,6 +96,10 @@ void State::toPoseMsg_camera(geometry_msgs::PoseWithCovarianceStamped & pose)
 	getPoseCovariance(pose.pose.covariance);
 }
 
+void State::toIntPoseMsg(geometry_msgs::PoseWithCovarianceStamped & pose){
+	eigen_conversions::vector3dToPoint(p_int_,pose.pose.pose.position);
+}
+
 void State::toExtStateMsg(sensor_fusion_comm::ExtState & state)
 {
 	eigen_conversions::vector3dToPoint(p_, state.pose.position);

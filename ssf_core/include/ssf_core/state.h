@@ -76,6 +76,7 @@ public:
 
   Eigen::Quaternion<double> q_int_;       ///< this is the integrated ang. vel. no corrections applied, to use for delta rot in external algos...
   Eigen::Matrix<double, 3, 1> p_int_;     ///< integrated position
+  Eigen::Matrix<double, 3, 1> v_int_;     /// integrated velocity
 
   Eigen::Matrix<double, N_STATE, N_STATE> P_;///< error state covariance
 
@@ -97,6 +98,8 @@ public:
   /** it does not set the header */
   void toPoseMsg_imu(geometry_msgs::PoseWithCovarianceStamped & pose);
   void toPoseMsg_camera(geometry_msgs::PoseWithCovarianceStamped & pose);
+
+  void toIntPoseMsg(geometry_msgs::PoseWithCovarianceStamped & pose);
 
   /// assembles an ExtState message from the state
   /** it does not set the header */

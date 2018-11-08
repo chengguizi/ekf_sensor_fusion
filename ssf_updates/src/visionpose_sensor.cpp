@@ -123,19 +123,19 @@ void VisionPoseSensorHandler::magTimerCallback(const ros::TimerEvent& te){
  void VisionPoseSensorHandler::measurementCallback(const geometry_msgs::PoseWithCovarianceStampedConstPtr poseMsg)
 {
 
-	if (poseMsg->header.stamp.isZero())
-	{
-		ROS_INFO("VO Disabled");
+	// if (poseMsg->header.stamp.isZero())
+	// {
+	// 	ROS_INFO("VO Disabled");
 		
-		unsigned char idx;
-		ssf_core::State state_now = measurements->ssf_core_.getCurrentState(idx);
+	// 	unsigned char idx;
+	// 	ssf_core::State state_now = measurements->ssf_core_.getCurrentState(idx);
 
-		ros::Time now;
-		now.fromSec(state_now.time_);
-		measurements->ssf_core_.broadcast_ci_transformation(idx,now,true);
-		measurements->ssf_core_.broadcast_iw_transformation(idx,now,true);
-		return;
-	}
+	// 	ros::Time now;
+	// 	now.fromSec(state_now.time_);
+	// 	measurements->ssf_core_.broadcast_ci_transformation(idx,now,true);
+	// 	measurements->ssf_core_.broadcast_iw_transformation(idx,now,true);
+	// 	return;
+	// }
 
 	if (lastMeasurementTime_.isZero())
 		ROS_INFO_STREAM("measurementCallback(): First Measurement Received at " << poseMsg->header.stamp);
@@ -144,7 +144,7 @@ void VisionPoseSensorHandler::magTimerCallback(const ros::TimerEvent& te){
 
 	auto global_start = measurements->ssf_core_.getGlobalStart();
 
-	if ( global_start == ros::Time(0) )
+	if ( global_start.isZero() )
 	{
 		ROS_WARN_THROTTLE(1,"Measurement received but global_start is not yet set.");
 		return;
@@ -210,17 +210,41 @@ void VisionPoseSensorHandler::magTimerCallback(const ros::TimerEvent& te){
 
 	measurements->ssf_core_.mutexLock();
 
+	ROS_INFO_STREAM("Measurement Callback for frame at " << time_old);
+
 	// find closest predicted state in time which fits the measurement time
 	ssf_core::State* state_old_ptr = nullptr;
 	unsigned char idx;
-	bool ret = measurements->ssf_core_.getClosestState(state_old_ptr, time_old,0.0, idx);
 
-	if (!ret){
+	// A LOOP TO TRY UNTIL VO IS NOT TOO EARLY
+	{
+		ssf_core::ClosestStateStatus ret = ssf_core::TOO_EARLY;
+
+		while(ret == ssf_core::TOO_EARLY && ros::ok()){
+			ret = measurements->ssf_core_.getClosestState(state_old_ptr, time_old,0.0, idx);
+
+			if (ret == ssf_core::TOO_EARLY){
+				measurements->ssf_core_.mutexUnlock();
+				ROS_INFO("Wait 200ms as VO is too fast");
+				ros::Duration(0.2).sleep();
+				measurements->ssf_core_.mutexLock();
+			}
+				
+		}
+
+		if (ret != ssf_core::FOUND){
 		ROS_WARN("finding Closest State not possible, reject measurement");
 		measurements->ssf_core_.mutexUnlock();
 		return;
 	}
-	int num_state = measurements->ssf_core_.getNumberofState();
+
+
+	}
+	
+	
+
+	
+	// int num_state = measurements->ssf_core_.getNumberofState();
 
 	
 	
@@ -234,9 +258,11 @@ void VisionPoseSensorHandler::magTimerCallback(const ros::TimerEvent& te){
 	// }
 
 	ssf_core::State state_old = *state_old_ptr;
-	auto diff = state_old.time_ - time_old.toSec();
+	// auto diff = state_old.time_ - time_old.toSec();
+	ros::Time buffer_time;
+	buffer_time.fromSec(state_old.time_);
 	std::cout << std::endl << std::endl <<
-		_seq << "th measurement frame found state buffer that is " << diff << " seconds from measurement at index " << (int)idx << std::endl;
+		_seq << "th measurement frame found state buffer at time " << buffer_time << " at index " << (int)idx << std::endl;
 
 	z_q_ = state_old.q_m_; // use IMU's internal q estimate as the FAKE measurement
 	Eigen::Matrix3d R_sw;
@@ -249,6 +275,19 @@ void VisionPoseSensorHandler::magTimerCallback(const ros::TimerEvent& te){
 	ROS_INFO_STREAM( "\nz_p_ = " << z_p_.transpose() << std::endl
 		<< "z_q_ " << z_q_.w() << ", " << z_q_.vec().transpose()
 	);
+
+	// debug
+	{
+		Eigen::Matrix<double, 3, 3> R_ci = state_old.q_ci_.toRotationMatrix();
+		Eigen::Matrix<double, 3, 3> R_iw = state_old.q_.toRotationMatrix();
+		Eigen::Vector3d world_z_p_ = R_iw*R_ci*z_p_ / state_old.L_ ;
+
+		ROS_INFO_STREAM( "rotated z_p_ = " << world_z_p_.transpose());
+	}
+	
+
+
+
 	ROS_WARN_STREAM( "\nR" << std::endl << R.diagonal().transpose() );
 
 	ROS_INFO_STREAM( "state_old " << state_old );

@@ -11,7 +11,7 @@ fixed_calib: true
 # noise_gyr: 0.005
 # noise_gyrbias: 4.0e-06
 
-noise_acc: 1
+noise_acc: 0.5
 noise_accbias: 0.005
 noise_gyr: 0.01
 noise_gyrbias:  0.00001
@@ -20,11 +20,11 @@ noise_scale: 0
 noise_qwv: 0.0
 noise_qci: 0.0
 noise_pic: 0.0
-delay: 0.00
+delay: -0.03
 
 # for visensor measurement
 # meas_noise1: 0.1
-meas_noise2: 0.1
+meas_noise2: 1 #0.1
 
 #data_playback: true
 
@@ -40,7 +40,7 @@ init/q_ci/z: 0.7071067812
 
 
 init/p_ci/x: 0.035  
-init/p_ci/y: -0.05
+init/p_ci/y: 0.05
 init/p_ci/z: 0
 
 # initializaton of world w.r.t. vision
