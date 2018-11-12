@@ -376,7 +376,7 @@ void SSF_Core::propagateState(const double dt)
 
 	auto quat_int = compute_delta_q(ew,ewold,dt);
 
-	// auto quat_int_int_ = compute_delta_q(cur_state.w_m_, prev_state.w_m_ , dt);
+	auto quat_int_int_ = compute_delta_q(cur_state.w_m_, prev_state.w_m_ , dt);
 
 	// first oder quaternion integration
 	cur_state.q_.coeffs() = quat_int * prev_state.q_.coeffs();
@@ -386,7 +386,7 @@ void SSF_Core::propagateState(const double dt)
 	// cur_state.q_ = cur_state.q_m_;
 
 	// first oder quaternion integration
-	cur_state.q_int_.coeffs() = quat_int * prev_state.q_int_.coeffs(); // quat_int_int_
+	cur_state.q_int_.coeffs() = quat_int_int_ * prev_state.q_int_.coeffs(); // quat_int_int_
 	cur_state.q_int_.normalize();
 	
 	// DEBUG

@@ -18,6 +18,7 @@
 
   <!-- Dependencies needed to compile this package. -->
   <build_depend>roscpp</build_depend>
+  <build_depend>std_msgs</build_depend>
   <build_depend>sensor_msgs</build_depend>
   <build_depend>dynamic_reconfigure</build_depend>
   <build_depend>sensor_fusion_comm</build_depend>
@@ -30,6 +31,7 @@
 
   <!-- Dependencies needed after this package is compiled. -->
   <run_depend>roscpp</run_depend>
+  <run_depend>std_msgs</run_depend>
   <run_depend>sensor_msgs</run_depend>
   <run_depend>dynamic_reconfigure</run_depend>
   <run_depend>sensor_fusion_comm</run_depend>
