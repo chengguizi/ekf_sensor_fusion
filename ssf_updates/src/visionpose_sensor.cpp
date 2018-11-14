@@ -188,10 +188,10 @@ void VisionPoseSensorHandler::magTimerCallback(const ros::TimerEvent& te){
 
 	bool isVelocity = poseMsg->header.frame_id == "camera_frame";
 
-	if (isVelocity)
-		ROS_INFO("frame: camera_frame -> isVelocity = true");
-	else
-		ROS_INFO_STREAM("frame: " << poseMsg->header.frame_id);
+	// if (isVelocity)
+	// 	ROS_INFO("frame: camera_frame -> isVelocity = true");
+	// else
+	// 	ROS_INFO_STREAM("frame: " << poseMsg->header.frame_id);
 
 	// take covariance from sensor
 	// fill the measurement covariance matrix R with the covariance values provided in msg
@@ -199,6 +199,7 @@ void VisionPoseSensorHandler::magTimerCallback(const ros::TimerEvent& te){
 	Eigen::Matrix<double, 6, 6> eigen_cov(poseMsg->pose.covariance.data());
 	
 	R.block<3, 3> (0, 0) = eigen_cov.block<3, 3>(0, 0);
+
 
 	// Preset noise level for q measurement from IMU estimate
 
@@ -210,7 +211,7 @@ void VisionPoseSensorHandler::magTimerCallback(const ros::TimerEvent& te){
 
 	measurements->ssf_core_.mutexLock();
 
-	ROS_INFO_STREAM("Measurement Callback for frame at " << time_old);
+	// ROS_INFO_STREAM("Measurement Callback for frame at " << time_old);
 
 	// find closest predicted state in time which fits the measurement time
 	ssf_core::State* state_old_ptr = nullptr;
@@ -271,33 +272,49 @@ void VisionPoseSensorHandler::magTimerCallback(const ros::TimerEvent& te){
                 0 , 0 , -1;
 
 	z_q_ = R_sw * z_q_;
-	
-	ROS_INFO_STREAM( "\nz_p_ = " << z_p_.transpose() << std::endl
-		<< "z_q_ " << z_q_.w() << ", " << z_q_.vec().transpose()
-	);
 
-	// debug
 	{
-		Eigen::Matrix<double, 3, 3> R_ci = state_old.q_ci_.toRotationMatrix();
-		Eigen::Matrix<double, 3, 3> R_iw = state_old.q_.toRotationMatrix();
-		Eigen::Vector3d world_z_p_ = R_iw*R_ci*z_p_ / state_old.L_ ;
+		double P_v_avg = state_old.P_(3,3) + state_old.P_(4,4) + state_old.P_(5,5) / 3.0;
+		double P_q_avg = state_old.P_(6,6) + state_old.P_(7,7) + state_old.P_(8,8) / 3.0;
 
-		ROS_INFO_STREAM( "rotated z_p_ = " << world_z_p_.transpose());
+		ROS_INFO_STREAM_THROTTLE(2,"P_v_avg=" << P_v_avg << ", R=" << R(0,0));
+		ROS_INFO_STREAM_THROTTLE(2,"P_q_avg=" << P_q_avg << ", R=" << R(3,3));
+
+		// Make sure the variance are not differ by too much
+		if (P_v_avg > R(0,0) * 30)
+		{
+			ROS_WARN_STREAM("R resets to " << P_v_avg / 30 << " from " << R(0,0) );
+			R(0,0) =  R(1,1) =  R(2,2) = P_v_avg / 30;
+		}
 	}
 	
+	
+	// ROS_INFO_STREAM( "\nz_p_ = " << z_p_.transpose() << std::endl
+	// 	<< "z_q_ " << z_q_.w() << ", " << z_q_.vec().transpose()
+	// );
+
+	// debug
+	// {
+	// 	Eigen::Matrix<double, 3, 3> R_ci = state_old.q_ci_.toRotationMatrix();
+	// 	Eigen::Matrix<double, 3, 3> R_iw = state_old.q_.toRotationMatrix();
+	// 	Eigen::Vector3d world_z_p_ = R_iw*R_ci*z_p_ / state_old.L_ ;
+
+	// 	ROS_INFO_STREAM( "rotated z_p_ = " << world_z_p_.transpose());
+	// }
+	
 
 
 
-	ROS_WARN_STREAM( "\nR" << std::endl << R.diagonal().transpose() );
+	// ROS_WARN_STREAM( "\nR" << std::endl << R.diagonal().transpose() );
 
-	ROS_INFO_STREAM( "state_old " << state_old );
+	ROS_INFO_STREAM_THROTTLE(2, "state_old " << state_old );
 
-	ROS_INFO_STREAM( "P_old " << state_old.P_.diagonal().transpose() );
+	// ROS_INFO_STREAM( "P_old " << state_old.P_.diagonal().transpose() );
 
 
 
-	double theta_dev = 180.0/M_PI*std::acos( 2 * std::pow(z_q_.coeffs().dot(state_old.q_.coeffs()),2.0) - 1.0 );
-	ROS_WARN_STREAM( "theta_dev between measurement and state q_ (deg): " << theta_dev);
+	// double theta_dev = 180.0/M_PI*std::acos( 2 * std::pow(z_q_.coeffs().dot(state_old.q_.coeffs()),2.0) - 1.0 );
+	// ROS_WARN_STREAM( "theta_dev between measurement and state q_ (deg): " << theta_dev);
 
 	/////////////////////////////////////
 	/////// RESET VELOCITY
@@ -368,8 +385,8 @@ void VisionPoseSensorHandler::magTimerCallback(const ros::TimerEvent& te){
 		Eigen::Matrix<double, 3, 3> R_iw = state_old.q_.toRotationMatrix();
 		r_old.block<3, 1> (0, 0) = z_p_ - R_ci.transpose() * R_iw.transpose() * state_old.v_* state_old.L_;
 
-		if (r_old.block<3, 1> (0, 0).norm() > 0.5)
-			ROS_WARN_STREAM( "BIG VELOCITY CHANGE: " << (r_old.block<3, 1>(0, 0).norm()) );
+		// if (r_old.block<3, 1> (0, 0).norm() > 0.5)
+		// 	ROS_WARN_STREAM( "BIG VELOCITY CHANGE: " << (r_old.block<3, 1>(0, 0).norm()) );
 		
 		// ROS_INFO_STREAM("v_err between z_p_ - v_ in world (IMU z_q_): " <<  (z_q_.toRotationMatrix() * z_p_ / state_old.L_ - state_old.v_).transpose()  );
 		// ROS_INFO_STREAM("v_err between z_p_ - v_ in world (state q_): " <<  (state_old.q_.toRotationMatrix() * z_p_ / state_old.L_ - state_old.v_).transpose()  );
@@ -382,7 +399,7 @@ void VisionPoseSensorHandler::magTimerCallback(const ros::TimerEvent& te){
 	q_err = state_old.q_.conjugate() * z_q_;
 	q_err.normalize();
 
-	ROS_INFO_STREAM("q_err between q_ and z_q_: " << q_err.w() << ", " << q_err.vec().transpose());
+	// ROS_INFO_STREAM("q_err between q_ and z_q_: " << q_err.w() << ", " << q_err.vec().transpose());
 
 
 	r_old.block<3, 1> (3, 0) = q_err.vec() / q_err.w()  * 2; // may not need  q_err.w()
@@ -409,7 +426,7 @@ void VisionPoseSensorHandler::magTimerCallback(const ros::TimerEvent& te){
 
 	bool do_update = true;
 
-	if (R(0,0) > 999)
+	if (R(0,0) >= 999)
 	{
 		ROS_WARN("Big Variance Detected");
 		do_update = false;

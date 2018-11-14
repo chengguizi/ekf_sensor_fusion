@@ -291,8 +291,8 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 	// ROS_INFO_STREAM_THROTTLE(0.5, "angle deviation from the initial q_ (deg): " << theta_dev );
 	// 	//  << "P diagonal(): " << std::endl << updated_state.P_.diagonal().transpose() << std::endl);
 
-	ROS_INFO_STREAM_THROTTLE(0.5, std::endl << "predict v: " << StateBuffer_[(unsigned char)(idx_state_ - 1)].v_.transpose() 
-		<< std::endl << "predict p" << StateBuffer_[(unsigned char)(idx_state_ - 1)].p_.transpose() );
+	// ROS_INFO_STREAM_THROTTLE(0.5, std::endl << "predict v: " << StateBuffer_[(unsigned char)(idx_state_ - 1)].v_.transpose() 
+		// << std::endl << "predict p" << StateBuffer_[(unsigned char)(idx_state_ - 1)].p_.transpose() );
 	// msgPoseCtrl_.header = msgPose_.header;
 	// StateBuffer_[(unsigned char)(idx_state_ - 1)].toExtStateMsg(msgPoseCtrl_);
 	//pubPoseCrtl_.publish(msgPoseCtrl_);
@@ -308,7 +308,7 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 Eigen::Matrix<double, 4, 4> compute_delta_q(const Eigen::Matrix<double, 3, 1> &ew, const Eigen::Matrix<double, 3, 1> &ewold, double dt){
 
 	typedef const Eigen::Matrix<double, 4, 4> ConstMatrix4;
-	typedef const Eigen::Matrix<double, 3, 1> ConstVector3;
+	// typedef const Eigen::Matrix<double, 3, 1> ConstVector3;
 	typedef Eigen::Matrix<double, 4, 4> Matrix4;
 
 	ConstMatrix4 Omega = omegaMatJPL(ew);
@@ -350,9 +350,9 @@ Eigen::Matrix<double, 4, 4> compute_delta_q(const Eigen::Matrix<double, 3, 1> &e
 
 void SSF_Core::propagateState(const double dt)
 {
-	typedef const Eigen::Matrix<double, 4, 4> ConstMatrix4;
+	// typedef const Eigen::Matrix<double, 4, 4> ConstMatrix4;
 	typedef const Eigen::Matrix<double, 3, 1> ConstVector3;
-	typedef Eigen::Matrix<double, 4, 4> Matrix4;
+	// typedef Eigen::Matrix<double, 4, 4> Matrix4;
 
 	// get references to current and previous state
 	State & cur_state = StateBuffer_[idx_state_];
@@ -411,9 +411,9 @@ void SSF_Core::propagateState(const double dt)
 	// }
 		
 
-	ROS_INFO_STREAM_THROTTLE(1, "\ndv-g based on current: " << (cur_state.q_.toRotationMatrix() * ea  - g_).transpose() << std::endl
-		<< "dv-g based on avg (with zero correction): " << dv_without_g.transpose() << std::endl
-	 	<< "v change:" << (dv_without_g * dt).transpose() );
+	// ROS_INFO_STREAM_THROTTLE(1, "\ndv-g based on current: " << (cur_state.q_.toRotationMatrix() * ea  - g_).transpose() << std::endl
+	// 	<< "dv-g based on avg (with zero correction): " << dv_without_g.transpose() << std::endl
+	//  	<< "v change:" << (dv_without_g * dt).transpose() );
 
 	cur_state.v_ = prev_state.v_ + dv_without_g * dt; // dv is world coordinate accerlation
 	cur_state.v_int_ = prev_state.v_int_ + dv_without_g_int * dt;
@@ -636,7 +636,7 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 
 	// assert( !( config_.fixed_scale || config_.fixed_bias || config_.fixed_calib ) );
 
-	ROS_WARN_STREAM("\ncorrection_ " << correction_.transpose() );
+	// ROS_WARN_STREAM("\ncorrection_ " << correction_.transpose() );
 	// state update:
 
 	// store old values in case of fuzzy tracking
@@ -653,6 +653,8 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 
 	delaystate.p_ = delaystate.p_ + correction_.block<3, 1> (0, 0);
 	delaystate.v_ = delaystate.v_ + correction_.block<3, 1> (3, 0);
+	if (std::abs((correction_(3, 0) + correction_(4, 0) + correction_(5, 0)) / 3.0 )  > 0.8)
+		ROS_WARN_STREAM("Big Velocity Changed Detected: " << (correction_.block<3, 1> (3, 0)).transpose());
 	delaystate.b_w_ = delaystate.b_w_ + correction_.block<3, 1> (9, 0);
 	delaystate.b_a_ = delaystate.b_a_ + correction_.block<3, 1> (12, 0);
 	delaystate.L_ = delaystate.L_ + correction_(15);
@@ -664,7 +666,7 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 
 	auto qbuff_q = quaternionFromSmallAngle(correction_.block<3, 1> (6, 0));
 
-	ROS_WARN_STREAM( "qbuff_q: " << qbuff_q.w() << ", " << qbuff_q.vec().transpose() );
+	// ROS_WARN_STREAM( "qbuff_q: " << qbuff_q.w() << ", " << qbuff_q.vec().transpose() );
 	delaystate.q_ = delaystate.q_ * qbuff_q;
 	delaystate.q_.normalize();
 
@@ -739,7 +741,7 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 	assert(checkForNumeric(&correction_[0], HLI_EKF_STATE_SIZE, "update"));
 
 
-	ROS_WARN_STREAM("applyCorrection(): now at state time = " << (long long)(StateBuffer_[(unsigned char)(idx_state_ - 1)].time_ * 1e9) << ", state = " << (unsigned int)(idx_state_-1));
+	// ROS_WARN_STREAM("applyCorrection(): now at state time = " << (long long)(StateBuffer_[(unsigned char)(idx_state_ - 1)].time_ * 1e9) << ", state = " << (unsigned int)(idx_state_-1));
 
 	// publish state
 	const unsigned char idx = (unsigned char)(idx_state_ - 1); // Hm: This is the most recent idx, with IMU

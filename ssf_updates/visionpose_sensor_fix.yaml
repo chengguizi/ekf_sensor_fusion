@@ -11,12 +11,12 @@ fixed_calib: true
 # noise_gyr: 0.005
 # noise_gyrbias: 4.0e-06
 
-noise_acc: 0.1
-noise_accbias: 0.03
-noise_gyr: 0.0002
-noise_gyrbias:  0.00001
+noise_acc: 0.2
+noise_accbias: 0.002
+noise_gyr: 0.005
+noise_gyrbias:  1.0e-5
 
-noise_scale: 0
+noise_scale: 0.0
 noise_qwv: 0.0
 noise_qci: 0.0
 noise_pic: 0.0
@@ -24,7 +24,7 @@ delay: -0.03
 
 # for visensor measurement
 # meas_noise1: 0.1
-meas_noise2: 0.05 #0.1
+meas_noise2: 0.01 #0.08
 
 #data_playback: true
 

@@ -183,10 +183,10 @@ public:
 		Eigen::Vector3d g_imu = imuEstimateMean.a_m_.array();
 
 		b_a_ = R_wi * (R_iw * g_imu - g_);	
-		//b_a_ << 0, 0, 0;
+		b_a_ << 0, 0, 0;
 
 		b_w_ = imuEstimateMean.w_m_.array();
-		//b_w_ << 0, 0, 0;
+		b_w_ << 0, 0, 0;
 
 		return init();
 		// global_start is not yet set
@@ -361,7 +361,7 @@ private:
 		double dev = 180.0/M_PI*std::acos( 2 * std::pow(q_iw_m_.coeffs().dot(q_iw_.coeffs()),2.0) - 1.0 );
 
 		ROS_INFO_STREAM("Deviation Angle = " << dev << "degree");
-		if ( std::abs(dev) > 20 ){ // check consistency with IMU's internal state, 10%
+		if ( std::abs(dev) > 45 ){ // check consistency with IMU's internal state, 10%
 			ROS_INFO_STREAM("Deviation Angle too big, try again.");
 			return false;
 		} 
@@ -391,15 +391,15 @@ private:
 		//// Constructing initial State Variance
 		/////////////////////////////////////////////
 		P_.setZero(); // error state covariance; if zero, a default initialization in ssf_core is used
-		double init_np = 0.1;
-		double init_nv = 0.01;
-		double init_nq = 0.0001;
-		double init_nbw = 0.0001;
-		double init_nba = 0.0001;
-		double init_L = 0;
+		double init_np = 0;
+		double init_nv = 0.1;
+		double init_nq = 0.001;
+		double init_nbw = 0.0005;
+		double init_nba = 0.015;
+		double init_L = 0.0001;
 		double init_qwv = 0;
-		double init_qci = 0;
-		double init_pci = 0;
+		double init_qci = 0.0001;
+		double init_pci = 0.0001;
 		Eigen::Vector3d initvar_p(Eigen::VectorXd::Ones(3)			*	init_np*init_np); // initial position is known
 		Eigen::Vector3d initvar_v(Eigen::VectorXd::Ones(3)			*	init_nv*init_nv); // variance of 1 m/s
 		Eigen::Vector3d initvar_q_err(Eigen::VectorXd::Ones(3)		*	init_nq*init_nq); // TODO: HOW TO ESTIMATE THIS?
