@@ -38,7 +38,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace ssf_core
 {
 SSF_Core::SSF_Core() : imu_received_(0), mag_received_(0)
-	, exact_sync_(ExactPolicy(N_STATE_BUFFER),subImu_,subMag_) , global_start_(0) , lastImuInputsTime_(ros::Time(0)), isImuCacheReady(false)
+	, approximate_sync_(ApproximatePolicy(N_STATE_BUFFER),subImu_,subMag_) , global_start_(0) , lastImuInputsTime_(ros::Time(0)), isImuCacheReady(false)
 {
 	/// ros stuff
 	ros::NodeHandle nh_local("~");
@@ -63,8 +63,8 @@ SSF_Core::SSF_Core() : imu_received_(0), mag_received_(0)
 	subMag_.registerCallback(boost::bind(SSF_Core::increment, &mag_received_));
 	check_synced_timer_ = nh_local.createWallTimer(ros::WallDuration(5.0), boost::bind(&SSF_Core::checkInputsSynchronized, this));
 
-	exact_sync_.registerCallback(boost::bind(&SSF_Core::imuCallback, this, _1, _2));
-	
+	// exact_sync_.registerCallback(boost::bind(&SSF_Core::imuCallback, this, _1, _2));
+	approximate_sync_.registerCallback(boost::bind(&SSF_Core::imuCallback, this, _1, _2));
 
 	qvw_inittimer_ = 1;
 

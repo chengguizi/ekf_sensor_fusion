@@ -171,12 +171,12 @@ private:
 	message_filters::Subscriber<sensor_msgs::MagneticField> subMag_;
 	/// IMPORTANT! message_filters::Subscriber MUST COME BEFORE message_filters::TimeSynchronizer
 
-	// typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Imu, sensor_msgs::MagneticField> ApproximatePolicy;
-	// typedef message_filters::Synchronizer<ApproximatePolicy> ApproximateSync;
-	//ApproximateSync approximate_sync_;
-	typedef message_filters::sync_policies::ExactTime<sensor_msgs::Imu, sensor_msgs::MagneticField> ExactPolicy;
-	typedef message_filters::Synchronizer<ExactPolicy> ExactSync;
-	ExactSync exact_sync_;
+	typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Imu, sensor_msgs::MagneticField> ApproximatePolicy;
+	typedef message_filters::Synchronizer<ApproximatePolicy> ApproximateSync;
+	ApproximateSync approximate_sync_;
+	//typedef message_filters::sync_policies::ExactTime<sensor_msgs::Imu, sensor_msgs::MagneticField> ExactPolicy;
+	//typedef message_filters::Synchronizer<ExactPolicy> ExactSync;
+	//ExactSync exact_sync_;
 	
 	//message_filters::TimeSynchronizer<sensor_msgs::Imu, sensor_msgs::MagneticField> sync;
 	

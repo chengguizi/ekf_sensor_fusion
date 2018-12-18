@@ -91,9 +91,16 @@ public:
 	{
 		// the sensor's world frame of Ellipse is NED, we are using ENU, therefore conversion is needed.
 		
+		
+		//R_sw << 0 , 1 , 0,
+                //1 , 0 , 0,
+                //0 , 0 , -1;
+
+		// For Visensor, imu's global frame is NWU, we are still using ENU	
+
 		R_sw << 0 , 1 , 0,
-                1 , 0 , 0,
-                0 , 0 , -1;
+                -1 , 0 , 0,
+                0 , 0 , 1;
 
 
 		const bool use_imu_internal_q = false;
