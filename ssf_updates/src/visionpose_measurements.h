@@ -78,29 +78,42 @@ public:
 		pnh.param("init/q_wv/z", q_wv_.z(), 0.0);
 		q_wv_.normalize();
 
+		Eigen::Quaternion<double> q_sw_;
+		ROS_ASSERT(pnh.getParam("init/q_sw/w", q_sw_.w()));
+		ROS_ASSERT(pnh.getParam("init/q_sw/x", q_sw_.x()));
+		ROS_ASSERT(pnh.getParam("init/q_sw/y", q_sw_.y()));
+		ROS_ASSERT(pnh.getParam("init/q_sw/z", q_sw_.z()));
+		q_sw_.normalize();
+
+		R_sw = q_sw_.toRotationMatrix();
+
+		// the sensor's world frame of Ellipse is NED, we are using ENU, therefore conversion is needed.
+		
+		//R_sw << 0 , 1 , 0,
+		//1 , 0 , 0,
+		//0 , 0 , -1;
+
+		// For Visensor, imu's global frame is NWU, we are still using ENU	
+
+		// R_sw << 0 , 1 , 0,
+        //         -1 , 0 , 0,
+        //         0 , 0 , 1;
+
+		
+
 		pnh.param("scale_init", scale_, 1.0);
 
 
 		ROS_INFO_STREAM("p_ci_: (x,y,z): ["  << p_ci_.x() << ", " << p_ci_.y() << ", " << p_ci_.z()  << "]");
 		ROS_INFO_STREAM("q_ci_: (w,x,y,z): [" << q_ci_.w() << ", " << q_ci_.x() << ", " << q_ci_.y() << ", " << q_ci_.z()  << "]");
 		ROS_INFO_STREAM("q_wv_: (w,x,y,z): [" << q_wv_.w() << ", " << q_wv_.x() << ", " << q_wv_.y() << ", " << q_wv_.z()  << "]");
+		ROS_INFO_STREAM("R_sw: " << std::endl << R_sw);
 		ROS_INFO_STREAM("scale_: " << scale_);
 	}
 
 	bool initStateZero(struct ssf_core::ImuInputsCache& imuEstimateMean)
 	{
-		// the sensor's world frame of Ellipse is NED, we are using ENU, therefore conversion is needed.
-		
-		
-		//R_sw << 0 , 1 , 0,
-                //1 , 0 , 0,
-                //0 , 0 , -1;
 
-		// For Visensor, imu's global frame is NWU, we are still using ENU	
-
-		R_sw << 0 , 1 , 0,
-                -1 , 0 , 0,
-                0 , 0 , 1;
 
 
 		const bool use_imu_internal_q = false;
@@ -335,7 +348,7 @@ public:
 
 private:
 
-	Eigen::Matrix3d R_sw; // transform between NED and ENU
+	Eigen::Matrix3d R_sw; // transform between sensor's global frame and ekf's global frame
 
 	Eigen::Matrix<double, 3, 1> p_iw_, v_iw_;
 

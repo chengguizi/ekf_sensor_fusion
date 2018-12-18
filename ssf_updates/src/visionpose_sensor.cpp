@@ -55,6 +55,18 @@ VisionPoseSensorHandler::VisionPoseSensorHandler(ssf_core::Measurements* meas) :
 	pnh.param("measurement_world_sensor", measurement_world_sensor_, true);
 	pnh.param("use_fixed_covariance", use_fixed_covariance_, true);
 
+
+	// Obtain transformation between sensor global frame and ekf global frame (ENU)
+	Eigen::Quaternion<double> q_sw_;
+	ROS_ASSERT(pnh.getParam("init/q_sw/w", q_sw_.w()));
+	ROS_ASSERT(pnh.getParam("init/q_sw/x", q_sw_.x()));
+	ROS_ASSERT(pnh.getParam("init/q_sw/y", q_sw_.y()));
+	ROS_ASSERT(pnh.getParam("init/q_sw/z", q_sw_.z()));
+	q_sw_.normalize();
+
+	R_sw = q_sw_.toRotationMatrix();
+
+
 	timer_mag_measure = nh.createTimer(ros::Duration(1), &VisionPoseSensorHandler::magTimerCallback, this);
 
 	ROS_INFO_COND(measurement_world_sensor_, "interpreting measurement as sensor w.r.t. world");
@@ -266,10 +278,10 @@ void VisionPoseSensorHandler::magTimerCallback(const ros::TimerEvent& te){
 		_seq << "th measurement frame found state buffer at time " << buffer_time << " at index " << (int)idx << std::endl;
 
 	z_q_ = state_old.q_m_; // use IMU's internal q estimate as the FAKE measurement
-	Eigen::Matrix3d R_sw;
-	R_sw << 0 , 1 , 0,
-                1 , 0 , 0,
-                0 , 0 , -1;
+	// Eigen::Matrix3d R_sw;
+	// R_sw << 0 , 1 , 0,
+    //             1 , 0 , 0,
+    //             0 , 0 , -1;
 
 	z_q_ = R_sw * z_q_;
 

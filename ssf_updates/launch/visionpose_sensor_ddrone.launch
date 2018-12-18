@@ -4,6 +4,6 @@
 			<remap from="ekf_fusion/mag_state_input" to="/mavros/imu/mag/sys_id_6" />
          	<remap from="ekf_fusion/visionpose_measurement" to="/zed/delta_odom" />
 
-	    	<rosparam file="$(find ssf_updates)/visionpose_sensor_fix.yaml"/>
+	    	<rosparam file="$(find ssf_updates)/visionpose_sensor_fix_ddrone.yaml"/>
     </node>
 </launch>

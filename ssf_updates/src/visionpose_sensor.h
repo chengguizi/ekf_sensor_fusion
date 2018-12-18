@@ -38,6 +38,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 class VisionPoseSensorHandler : public ssf_core::MeasurementHandler
 {
 private:
+
+  Eigen::Matrix3d R_sw; // transform between sensor's global frame and ekf's global frame
+
   // measurements
   Eigen::Matrix<double, 3, 1> z_p_; /// sensor-position measurement
   Eigen::Quaternion<double> z_q_;   /// sensor-attitude measurement

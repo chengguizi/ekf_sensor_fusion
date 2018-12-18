@@ -29,25 +29,31 @@ meas_noise2: 0.01 #0.08
 #data_playback: true
 
 # initialization of camera w.r.t. IMU
-init/q_ci/w: 1
+init/q_ci/w: 0
 init/q_ci/x: 0
-init/q_ci/y: 0 # y points to the ground, x points to the left, z points back
-init/q_ci/z: 0
+init/q_ci/y: 0.7071067812 # y points to the ground, x points to the left, z points back
+init/q_ci/z: 0.7071067812
 
 # -1     0     0
 #  0     0     1
 #  0     1     0
 
 
-init/p_ci/x: 0.03  
-init/p_ci/y: 0.0
-init/p_ci/z: 0.05
+init/p_ci/x: 0.035  
+init/p_ci/y: 0.05
+init/p_ci/z: 0
 
-# initializaton of world w.r.t. vision
-init/q_wv/w: 1.0
-init/q_wv/x: 0.0
-init/q_wv/y: 0.0
-init/q_wv/z: 0.0
+
+# R_sw
+# Arena Glass uses NED, EKF uses ENU
+# 0 , 1 , 0,
+# 1 , 0 , 0,
+# 0 , 0 , -1;
+
+init/q_sw/w: 0
+init/q_sw/x: 0.7071068
+init/q_sw/y: 0.7071068
+init/q_sw/z: 0
 
 use_fixed_covariance: false
 measurement_world_sensor: true  # selects if sensor measures its position w.r.t. world (true, e.g. Vicon) or the position of the world coordinate system w.r.t. the sensor (false, e.g. ethzasl_ptam)

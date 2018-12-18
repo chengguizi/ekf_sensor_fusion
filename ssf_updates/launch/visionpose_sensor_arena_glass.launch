@@ -1,0 +1,9 @@
+<launch>
+    <node pkg="ssf_updates" type="visionpose_sensor" name="ekf_fusion"   clear_params="true" output="screen">
+			<remap from="ekf_fusion/imu_state_input" to="/imu0" />
+			<remap from="ekf_fusion/mag_state_input" to="/mag0" />
+         	<remap from="ekf_fusion/visionpose_measurement" to="/stereo_odometer/velocity" />
+
+	    	<rosparam file="$(find ssf_updates)/visionpose_sensor_fix_arena_glass.yaml"/>
+    </node>
+</launch>
