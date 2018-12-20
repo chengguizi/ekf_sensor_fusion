@@ -260,7 +260,11 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 
 	r_old.block<3, 1> (3, 0) = q_err.vec() / q_err.w()  * 2; // may not need  q_err.w()
 
-	std::cout << "z_v_ = " << std::endl << z_v_.transpose() << std::endl;
+	if (velocity_measurement_)
+		std::cout << "z_v_ = " << std::endl << z_v_.transpose() << std::endl;
+	else	
+		std::cout << "z_p_ = " << std::endl << z_v_.transpose() << std::endl;
+		
 	std::cout << "z_q_ = " << std::endl << z_q_.w() << ", " << z_q_.vec().transpose() << std::endl;
 	std::cout << "r_old = " << std::endl << r_old.transpose() << std::endl;
 	
