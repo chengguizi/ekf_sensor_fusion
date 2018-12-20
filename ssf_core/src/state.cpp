@@ -86,6 +86,8 @@ void State::toPoseMsg_imu(geometry_msgs::PoseWithCovarianceStamped & pose)
 	eigen_conversions::vector3dToPoint(p_, pose.pose.pose.position);
 	eigen_conversions::quaternionToMsg(q_, pose.pose.pose.orientation);
 	getPoseCovariance(pose.pose.covariance);
+
+        pose.header.frame_id = "map";
 }
 
 void State::toPoseMsg_camera(geometry_msgs::PoseWithCovarianceStamped & pose)
@@ -94,6 +96,8 @@ void State::toPoseMsg_camera(geometry_msgs::PoseWithCovarianceStamped & pose)
 	eigen_conversions::vector3dToPoint(p_, pose.pose.pose.position);
 	eigen_conversions::quaternionToMsg(q_*q_ci_*q_calt_c, pose.pose.pose.orientation);
 	getPoseCovariance(pose.pose.covariance);
+
+        pose.header.frame_id = "map";
 }
 
 void State::toIntPoseMsg(geometry_msgs::PoseWithCovarianceStamped & pose){

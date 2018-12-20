@@ -874,7 +874,7 @@ void SSF_Core::broadcast_iw_transformation(const unsigned char idx, const ros::T
 	state.toTransformMsg(tf_stamped,state.p_,state.q_m_);
 
 	tf_stamped.header.stamp = timestamp;
-	tf_stamped.header.frame_id = "world_frame";
+        tf_stamped.header.frame_id = "map";
 	tf_stamped.header.seq = seq;
 	tf_stamped.child_frame_id = "imu_frame";
 

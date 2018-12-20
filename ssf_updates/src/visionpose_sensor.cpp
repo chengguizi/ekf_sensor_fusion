@@ -60,10 +60,13 @@ VisionPoseSensorHandler::VisionPoseSensorHandler(ssf_core::Measurements* meas) :
 
 	// Obtain transformation between sensor global frame and ekf global frame (ENU)
 	Eigen::Quaternion<double> q_sw_;
-	ROS_ASSERT(pnh.getParam("init/q_sw/w", q_sw_.w()));
-	ROS_ASSERT(pnh.getParam("init/q_sw/x", q_sw_.x()));
-	ROS_ASSERT(pnh.getParam("init/q_sw/y", q_sw_.y()));
-	ROS_ASSERT(pnh.getParam("init/q_sw/z", q_sw_.z()));
+        pnh.getParam("init/q_sw/w", q_sw_.w());
+        pnh.getParam("init/q_sw/x", q_sw_.x());
+        pnh.getParam("init/q_sw/y", q_sw_.y());
+        pnh.getParam("init/q_sw/z", q_sw_.z());
+
+        ROS_INFO_STREAM(" q_sw_ " << q_sw_.w() << ", " << q_sw_.vec().transpose());
+
 	q_sw_.normalize();
 
 	R_sw = q_sw_.toRotationMatrix();

@@ -2,6 +2,8 @@ velocity_measurement: true # velocity instead of delta pose change
 use_fixed_covariance: false # for measurement
 pose_of_camera_not_imu: false  # for ekf output
 
+use_imu_internal_q: true
+
 max_state_measurement_variance_ratio: 1000
 
 scale_init: 1.0
@@ -46,8 +48,8 @@ init/p_ci/z: 0.05
 # -1 , 0 , 0,
 # 0 , 0 , 1;
 
-init/q_sw/w: 0.7071068
+init/q_sw/w: 1
 init/q_sw/x: 0.0
 init/q_sw/y: 0.0
-init/q_sw/z: -0.7071068
+init/q_sw/z: 0.0
 

@@ -62,6 +62,9 @@ public:
 		// - it also inherit and public SSF_Core() instance: ssf_core_. this is how SSF_core is engaged
 
 		ros::NodeHandle pnh("~");
+                pnh.param("use_imu_internal_q", use_imu_internal_q, false);
+
+
 		pnh.param("init/p_ci/x", p_ci_[0], 0.0);
 		pnh.param("init/p_ci/y", p_ci_[1], 0.0);
 		pnh.param("init/p_ci/z", p_ci_[2], 0.0);
@@ -79,10 +82,10 @@ public:
 		q_wv_.normalize();
 
 		Eigen::Quaternion<double> q_sw_;
-		ROS_ASSERT(pnh.getParam("init/q_sw/w", q_sw_.w()));
-		ROS_ASSERT(pnh.getParam("init/q_sw/x", q_sw_.x()));
-		ROS_ASSERT(pnh.getParam("init/q_sw/y", q_sw_.y()));
-		ROS_ASSERT(pnh.getParam("init/q_sw/z", q_sw_.z()));
+                pnh.getParam("init/q_sw/w", q_sw_.w());
+                pnh.getParam("init/q_sw/x", q_sw_.x());
+                pnh.getParam("init/q_sw/y", q_sw_.y());
+                pnh.getParam("init/q_sw/z", q_sw_.z());
 		q_sw_.normalize();
 
 		R_sw = q_sw_.toRotationMatrix();
@@ -114,9 +117,6 @@ public:
 	bool initStateZero(struct ssf_core::ImuInputsCache& imuEstimateMean)
 	{
 
-
-
-		const bool use_imu_internal_q = false;
 		Eigen::Matrix3d R_wi,R_iw; 
 		if (use_imu_internal_q == false)
 		{
@@ -368,6 +368,7 @@ private:
 	Eigen::Quaternion<double> q_m_;
 
 	double scale_;
+        bool use_imu_internal_q;
 
 	ssf_core::SSF_Core::ErrorStateCov P_;
 
