@@ -367,7 +367,7 @@ public:
 			S = H_delayed * StateBuffer_[idx_delaystate].P_ * H_delayed.transpose() + R_delayed;
 			K = P * H_delayed.transpose() * S.inverse();
 
-			std::cout << "gain K.diagonal():" << std::endl << K.diagonal().transpose() << std::endl;
+			// std::cout << "gain K.diagonal():" << std::endl << K.diagonal().transpose() << std::endl;
 
 			correction_ = K * res_delayed;
 			const ErrorStateCov KH = (ErrorStateCov::Identity() - K * H_delayed);
@@ -376,7 +376,7 @@ public:
 			// make sure P stays symmetric
 			P = 0.5 * (P + P.transpose());
 
-			std::cout << "P after update: " << std::endl << P.diagonal().transpose() << std::endl;
+			// std::cout << "P after update: " << std::endl << P.diagonal().transpose() << std::endl;
 
 			return applyCorrection(idx_delaystate, correction_, fuzzythres, msg_header);
 		}

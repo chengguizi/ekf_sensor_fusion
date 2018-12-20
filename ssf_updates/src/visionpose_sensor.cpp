@@ -153,7 +153,7 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 
 	measurements->ssf_core_.mutexLock();
 
-	// ROS_INFO_STREAM("Measurement Callback for frame at " << time_old);
+	ROS_INFO_STREAM("Measurement Callback for frame at " << time_old);
 
 	// find closest predicted state in time which fits the measurement time
 	ssf_core::State* state_old_ptr = nullptr;
@@ -210,6 +210,8 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 
 	ROS_INFO_STREAM_THROTTLE(2, "state_old " << state_old );
 
+	std::cout << "state_old " << state_old << std::endl;
+
 
 	H_old.setZero();
 	auto _identity3 = Eigen::Matrix<double, 3, 3>::Identity();
@@ -258,7 +260,8 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 
 	r_old.block<3, 1> (3, 0) = q_err.vec() / q_err.w()  * 2; // may not need  q_err.w()
 
-
+	std::cout << "z_v_ = " << std::endl << z_v_.transpose() << std::endl;
+	std::cout << "z_q_ = " << std::endl << z_q_.w() << ", " << z_q_.vec().transpose() << std::endl;
 	std::cout << "r_old = " << std::endl << r_old.transpose() << std::endl;
 	
 	// call update step in core class
