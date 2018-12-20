@@ -1,4 +1,8 @@
-pose_of_camera_not_imu: false
+velocity_measurement: true # velocity instead of delta pose change
+pose_of_camera_not_imu: false # for ekf output
+use_fixed_covariance: false
+
+max_state_measurement_variance_ratio: 1000
 
 scale_init: 1.0
 fixed_scale: true
@@ -11,10 +15,15 @@ fixed_calib: true
 # noise_gyr: 0.005
 # noise_gyrbias: 4.0e-06
 
-noise_acc: 0.2
-noise_accbias: 0.002
+# noise_acc: 0.2
+# noise_accbias: 0.002
+# noise_gyr: 0.005
+# noise_gyrbias:  1.0e-5
+
+noise_acc: 0.5
+noise_accbias: 0.005
 noise_gyr: 0.005
-noise_gyrbias:  1.0e-5
+noise_gyrbias:  0.00005
 
 noise_scale: 0.0
 noise_qwv: 0.0
@@ -23,7 +32,7 @@ noise_pic: 0.0
 delay: -0.03
 
 # for visensor measurement
-# meas_noise1: 0.1
+meas_noise1: 0.00000001
 meas_noise2: 0.01 #0.08
 
 #data_playback: true
@@ -50,10 +59,8 @@ init/p_ci/z: 0
 # 1 , 0 , 0,
 # 0 , 0 , -1;
 
-init/q_sw/w: 0
+init/q_sw/w: 0.0
 init/q_sw/x: 0.7071068
 init/q_sw/y: 0.7071068
-init/q_sw/z: 0
+init/q_sw/z: 0.0
 
-use_fixed_covariance: false
-measurement_world_sensor: true  # selects if sensor measures its position w.r.t. world (true, e.g. Vicon) or the position of the world coordinate system w.r.t. the sensor (false, e.g. ethzasl_ptam)

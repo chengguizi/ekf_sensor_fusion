@@ -1,4 +1,8 @@
-pose_of_camera_not_imu: false
+velocity_measurement: true # velocity instead of delta pose change
+use_fixed_covariance: false # for measurement
+pose_of_camera_not_imu: false  # for ekf output
+
+max_state_measurement_variance_ratio: 1000
 
 scale_init: 1.0
 fixed_scale: true
@@ -20,13 +24,11 @@ noise_scale: 0.0
 noise_qwv: 0.0
 noise_qci: 0.0
 noise_pic: 0.0
-delay: -0.03
+delay: 0
 
 # for visensor measurement
 # meas_noise1: 0.1
 meas_noise2: 0.01 #0.08
-
-#data_playback: true
 
 # initialization of camera w.r.t. IMU
 init/q_ci/w: 1
@@ -45,9 +47,7 @@ init/p_ci/z: 0.05
 # 0 , 0 , 1;
 
 init/q_sw/w: 0.7071068
-init/q_sw/x: 0
-init/q_sw/y: 0
+init/q_sw/x: 0.0
+init/q_sw/y: 0.0
 init/q_sw/z: -0.7071068
 
-use_fixed_covariance: false
-measurement_world_sensor: true  # selects if sensor measures its position w.r.t. world (true, e.g. Vicon) or the position of the world coordinate system w.r.t. the sensor (false, e.g. ethzasl_ptam)

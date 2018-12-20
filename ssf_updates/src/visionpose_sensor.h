@@ -42,21 +42,19 @@ private:
   Eigen::Matrix3d R_sw; // transform between sensor's global frame and ekf's global frame
 
   // measurements
-  Eigen::Matrix<double, 3, 1> z_p_; /// sensor-position measurement
+  Eigen::Matrix<double, 3, 1> z_v_; /// sensor-velocity measurement
   Eigen::Quaternion<double> z_q_;   /// sensor-attitude measurement
 
-  double n_zp_;                     /// noise for position measurement
+  double n_zv_;                     /// noise for velocity measurement
   double n_zq_;                     /// noise for attitude measurement
 
   ros::Subscriber subMeasurement_;
 
-  ros::Timer timer_mag_measure;
-
-  bool measurement_world_sensor_; ///< defines if the pose of the sensor is measured in world coordinates (true, default) or vice versa (false, e.g. PTAM)
   bool use_fixed_covariance_; ///< use fixed covariance set by dynamic reconfigure
+  bool velocity_measurement_;
+  int max_state_measurement_variance_ratio_;
 
   ros::Time lastMeasurementTime_;
-  // bool has_measurement;
 
   void subscribe();
   void measurementCallback(const geometry_msgs::PoseWithCovarianceStampedConstPtr poseMsg);

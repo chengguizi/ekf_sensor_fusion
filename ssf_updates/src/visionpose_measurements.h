@@ -146,7 +146,7 @@ public:
 			//// IMPORTANT: gravity direction is straight upwards!
 			
 
-			std::cout << "g_ = " << std::endl << g_.transpose() << std::endl;
+			
 
 			normalvec_down = - imuEstimateMean.a_m_.normalized().array(); // negative direction of gravity acceleration
 
@@ -194,7 +194,8 @@ public:
 			R_wi = R_iw.transpose();
 		}
 
-		g_ << 0, 0, imuEstimateMean.a_m_.norm() ; // gravity is in z-axis, using ENU coordinate
+		g_ << 0, 0, (R_iw*imuEstimateMean.a_m_)(2) ; // gravity is in z-axis, using ENU coordinate
+		std::cout << "g_ = " << std::endl << g_.transpose() << ", a_m_ norm = " << imuEstimateMean.a_m_.norm() << std::endl;
 
 		//////////////////////////////////
 		/// Bias Estimation
@@ -412,10 +413,10 @@ private:
 		/////////////////////////////////////////////
 		P_.setZero(); // error state covariance; if zero, a default initialization in ssf_core is used
 		double init_np = 0;
-		double init_nv = 0.1;
-		double init_nq = 0.001;
+		double init_nv = 0.0;
+		double init_nq = 0.0;
 		double init_nbw = 0.0005;
-		double init_nba = 0.015;
+		double init_nba = 0.1;
 		double init_L = 0.0001;
 		double init_qwv = 0;
 		double init_qci = 0.0001;
