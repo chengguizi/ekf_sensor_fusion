@@ -156,7 +156,7 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 
 	measurements->ssf_core_.mutexLock();
 
-	ROS_INFO_STREAM("Measurement Callback for frame at " << time_old);
+	std::cout << "Measurement Callback for frame at " << time_old << std::endl;
 
 	// find closest predicted state in time which fits the measurement time
 	ssf_core::State* state_old_ptr = nullptr;
@@ -211,7 +211,7 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	
 
 
-	ROS_INFO_STREAM_THROTTLE(2, "state_old " << state_old );
+	ROS_INFO_STREAM_THROTTLE(10, "state_old " << state_old );
 
 	std::cout << "state_old " << state_old << std::endl;
 
@@ -267,7 +267,7 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 		std::cout << "z_v_ = " << std::endl << z_v_.transpose() << std::endl;
 	else	
 		std::cout << "z_p_ = " << std::endl << z_v_.transpose() << std::endl;
-		
+
 	std::cout << "z_q_ = " << std::endl << z_q_.w() << ", " << z_q_.vec().transpose() << std::endl;
 	std::cout << "r_old = " << std::endl << r_old.transpose() << std::endl;
 	

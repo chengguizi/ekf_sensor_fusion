@@ -247,13 +247,13 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 		last_wm = StateBuffer_[idx_state_].w_m_;
 
 
-	if (std::abs(StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_) > 0.5)
+	if (std::abs(StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_) > 0.1)
 	{
 		ROS_ERROR_STREAM("large time-gap detected, resetting previous state to current state time: "
 		 << (long long)(StateBuffer_[idx_state_].time_ * 1e9) << ", " << 
-		 (long long)(StateBuffer_[(unsigned char)(idx_state_ - 1)].time_ * 1e9) << ", state = " << (unsigned int)idx_state_ << "abs = " << std::abs(StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_) << "normal = " << StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_);
+		 (long long)(StateBuffer_[(unsigned char)(idx_state_ - 1)].time_ * 1e9) << ", state = " << (unsigned int)idx_state_ << ", abs = " << std::abs(StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_) << ", normal = " << StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_);
 		StateBuffer_[(unsigned char)(idx_state_ - 1)].time_ = StateBuffer_[(idx_state_)].time_;
-		exit(-1);
+		// exit(-1);
 	}
 
 	propagateState(StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_); 
