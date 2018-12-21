@@ -53,6 +53,7 @@ private:
   bool use_fixed_covariance_; ///< use fixed covariance set by dynamic reconfigure
   bool velocity_measurement_;
   int max_state_measurement_variance_ratio_;
+  double sigma_distance_scale;
 
   ros::Time lastMeasurementTime_;
 

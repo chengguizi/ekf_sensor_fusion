@@ -57,6 +57,8 @@ VisionPoseSensorHandler::VisionPoseSensorHandler(ssf_core::Measurements* meas) :
 
 	pnh.param("max_state_measurement_variance_ratio", max_state_measurement_variance_ratio_, 30);
 
+	pnh.param("sigma_distance_scale", sigma_distance_scale, 10.0);
+
 
 	// Obtain transformation between sensor global frame and ekf global frame (ENU)
 	Eigen::Quaternion<double> q_sw_;
@@ -194,20 +196,20 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 		_seq << "th measurement frame found state buffer at time " << buffer_time << " at index " << (int)idx << std::endl;
 
 	z_q_ = R_sw * state_old.q_m_; // use IMU's internal q estimate as the FAKE measurement
+
+	double P_v_avg = state_old.P_(3,3) + state_old.P_(4,4) + state_old.P_(5,5) / 3.0;
+	double P_q_avg = state_old.P_(6,6) + state_old.P_(7,7) + state_old.P_(8,8) / 3.0;
+
+	ROS_INFO_STREAM_THROTTLE(15,"P_v_avg=" << P_v_avg << ", R=" << R(0,0));
+	ROS_INFO_STREAM_THROTTLE(15,"P_q_avg=" << P_q_avg << ", R=" << R(3,3));
+
+	// Make sure the variance are not differ by too much
+	if (P_v_avg > R(0,0) * max_state_measurement_variance_ratio_)
 	{
-		double P_v_avg = state_old.P_(3,3) + state_old.P_(4,4) + state_old.P_(5,5) / 3.0;
-		double P_q_avg = state_old.P_(6,6) + state_old.P_(7,7) + state_old.P_(8,8) / 3.0;
-
-		ROS_INFO_STREAM_THROTTLE(15,"P_v_avg=" << P_v_avg << ", R=" << R(0,0));
-		ROS_INFO_STREAM_THROTTLE(15,"P_q_avg=" << P_q_avg << ", R=" << R(3,3));
-
-		// Make sure the variance are not differ by too much
-		if (P_v_avg > R(0,0) * max_state_measurement_variance_ratio_)
-		{
-			ROS_WARN_STREAM("R resets to " << P_v_avg / 30 << " from " << R(0,0) );
-			R(0,0) =  R(1,1) =  R(2,2) = P_v_avg / 30;
-		}
+		ROS_WARN_STREAM("R resets to " << P_v_avg / 30 << " from " << R(0,0) );
+		R(0,0) =  R(1,1) =  R(2,2) = P_v_avg / 30;
 	}
+
 	
 
 
@@ -281,12 +283,16 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 		do_update = false;
 	}
 
-	// check v difference
-	if (r_old.block<3, 1>(0, 0).norm() > 10.0)
+	// check for velocity measurement outliers, using variance
+
+	double velocity_err_distance = r_old.block<3, 1>(0, 0).norm();
+	double sigma_distance = sigma_distance_scale * ( R(0,0) + state_old.P_.diagonal().block<3,1>(3,0).norm() );
+
+	ROS_INFO_STREAM_THROTTLE(2, "vel error = " << velocity_err_distance << ", " << sigma_distance_scale << "sigma distance = " << sigma_distance);
+	if (velocity_err_distance > sigma_distance)
 	{
-		ROS_WARN_STREAM("Big Velocity Difference Detected: " << (r_old.block<3, 1>(0, 0).norm()) );
+		ROS_WARN_STREAM("Big Velocity Difference Detected: " << velocity_err_distance << ", compared to sigma-distance: " << sigma_distance );
 		do_update = false;
-		exit(1);
 	}
 
 	if ( (state_old.v_ - state_old_ptr->v_).norm() > 3 )
