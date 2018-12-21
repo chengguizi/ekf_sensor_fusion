@@ -193,6 +193,9 @@ public:
 			R_iw = q_iw_.toRotationMatrix();
 			R_wi = R_iw.transpose();
 		}
+		
+		// Initialise world frame in local frame
+		q_wv_ = q_iw_.inverse();
 
 		g_ << 0, 0, (R_iw*imuEstimateMean.a_m_)(2) ; // gravity is in z-axis, using ENU coordinate
 		std::cout << "g_ = " << std::endl << g_.transpose() << ", a_m_ norm = " << imuEstimateMean.a_m_.norm() << std::endl;

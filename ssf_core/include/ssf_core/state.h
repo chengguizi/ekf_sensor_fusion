@@ -96,8 +96,8 @@ public:
 
   /// assembles a PoseWithCovarianceStamped message from the state
   /** it does not set the header */
-  void toPoseMsg_imu(geometry_msgs::PoseWithCovarianceStamped & pose);
-  void toPoseMsg_camera(geometry_msgs::PoseWithCovarianceStamped & pose);
+  void toPoseMsg_imu(geometry_msgs::PoseWithCovarianceStamped & pose, bool isLocal = false);
+  void toPoseMsg_camera(geometry_msgs::PoseWithCovarianceStamped & pose, bool isLocal = false);
 
   void toIntPoseMsg(geometry_msgs::PoseWithCovarianceStamped & pose);
 

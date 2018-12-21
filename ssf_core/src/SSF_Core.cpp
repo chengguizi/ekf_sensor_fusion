@@ -50,6 +50,7 @@ SSF_Core::SSF_Core() : imu_received_(0), mag_received_(0)
 	pubState_ = nh_local.advertise<sensor_fusion_comm::DoubleArrayStamped> ("state_out", 3);
 	//pubCorrect_ = nh.advertise<sensor_fusion_comm::ExtEkf> ("correction", 1);
 	pubPose_ = nh_local.advertise<geometry_msgs::PoseWithCovarianceStamped> ("pose", 3);
+	pubPose_local_ = nh_local.advertise<geometry_msgs::PoseWithCovarianceStamped> ("pose_local", 3);
 	pubPoseCorrected_ = nh_local.advertise<geometry_msgs::PoseWithCovarianceStamped> ("pose_corrected", 3);
 	pubIntPose_ = nh_local.advertise<geometry_msgs::PoseWithCovarianceStamped> ("pose_integrated", 3);
 	//pubPoseCrtl_ = nh.advertise<sensor_fusion_comm::ExtState> ("ext_state", 1);
@@ -275,11 +276,19 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 	State &updated_state = StateBuffer_[(unsigned char)(idx_state_ - 1)];
 
 	if (_is_pose_of_camera_not_imu)
+	{
 		updated_state.toPoseMsg_camera(msgPose_);
+		updated_state.toPoseMsg_camera(msgPose_local_, true);
+	}
 	else
+	{
 		updated_state.toPoseMsg_imu(msgPose_);
+		updated_state.toPoseMsg_imu(msgPose_local_, true);
+	}
+		
 
 	pubPose_.publish(msgPose_);
+	pubPose_local_.publish(msgPose_local_);
 
 	// publish transforms to help initialising VO
 	// broadcast_ci_transformation((unsigned char)(idx_state_ - 1),msgPose_.header.stamp);

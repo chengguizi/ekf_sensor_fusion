@@ -245,6 +245,9 @@ private:
 	ros::Publisher pubPose_; ///< publishes 6DoF pose output
 	geometry_msgs::PoseWithCovarianceStamped msgPose_;
 
+	ros::Publisher pubPose_local_; ///< publishes 6DoF pose output
+	geometry_msgs::PoseWithCovarianceStamped msgPose_local_;
+
 	ros::Publisher pubPoseCorrected_; ///< HM: publishes 6DoF pose output, after each applyCorrection
 	geometry_msgs::PoseWithCovarianceStamped msgPoseCorrected_;
 
