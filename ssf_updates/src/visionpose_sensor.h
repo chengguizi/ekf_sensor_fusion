@@ -43,7 +43,8 @@ private:
 
   // measurements
   Eigen::Matrix<double, 3, 1> z_v_; /// sensor-velocity measurement
-  Eigen::Quaternion<double> z_q_;   /// sensor-attitude measurement
+  Eigen::Quaternion<double> z_w_;  /// sensor-angular-velocity measurement
+  Eigen::Quaternion<double> z_q_;   /// fake attitude measurement from IMU
 
   double n_zv_;                     /// noise for velocity measurement
   double n_zq_;                     /// noise for attitude measurement

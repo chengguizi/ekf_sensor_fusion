@@ -137,20 +137,8 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	Eigen::Matrix<double, N_MEAS, N_MEAS> R;
 
 
-	z_v_ = Eigen::Matrix<double,3,1>(poseMsg->pose.pose.position.x, poseMsg->pose.pose.position.y, poseMsg->pose.pose.position.z); 
 
-	R.setZero();
-	if (use_fixed_covariance_)
-		R(0,0) = R(1,1) = R(2,2) = n_zv_;
-	else
-	{
-		Eigen::Matrix<double, 6, 6> eigen_cov(poseMsg->pose.covariance.data());
-		R.block<3, 3> (0, 0) = eigen_cov.block<3, 3>(0, 0);
-	}
-		
-
-	// Preset noise level for q measurement from IMU estimate
-	R(3,3) = R(4,4) = R(5,5) = n_zq_;
+	
 
 	//////////////////////////////////////////////////////////////////
 	//////// Start mutex
@@ -158,7 +146,8 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 
 	measurements->ssf_core_.mutexLock();
 
-	std::cout << "Measurement Callback for frame at " << time_old << std::endl;
+	std::cout << std::endl << "Measurement Callback for frame at " << time_old << std::endl;
+	std::cout << "measurement noise R = " << R.diagonal().transpose() << std::endl;
 
 	// find closest predicted state in time which fits the measurement time
 	ssf_core::State* state_old_ptr = nullptr;
@@ -192,8 +181,36 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	ssf_core::State state_old = *state_old_ptr;
 	ros::Time buffer_time;
 	buffer_time.fromSec(state_old.time_);
-	std::cout << std::endl << std::endl <<
-		_seq << "th measurement frame found state buffer at time " << buffer_time << " at index " << (int)idx << std::endl;
+	std::cout << _seq << "th measurement frame found state buffer at time " << buffer_time << " at index " << (int)idx << std::endl;
+
+
+	// The input velocity measurement is in camera's body frame, not imu's body frame, hence transformation is needed
+	Eigen::Matrix<double,3,1> z_v_raw_ = Eigen::Matrix<double,3,1>(poseMsg->pose.pose.position.x, poseMsg->pose.pose.position.y, poseMsg->pose.pose.position.z); 
+
+	z_w_ = Eigen::Quaternion<double>(poseMsg->pose.pose.orientation.w, poseMsg->pose.pose.orientation.x, poseMsg->pose.pose.orientation.y, poseMsg->pose.pose.orientation.z);
+
+	// velocity = angular-velocity * radius
+	Eigen::AngleAxisd w_angleaxis(z_w_);
+	const Eigen::Vector3d rotation_vector = w_angleaxis.axis() * w_angleaxis.angle();
+
+	const Eigen::Vector3d p_ic = state_old.q_ci_.inverse() * (-state_old.p_ci_);
+
+	Eigen::Matrix<double,3,1> z_v_induced_ = rotation_vector.cross(p_ic);
+
+	z_v_ = z_v_raw_ + z_v_induced_;
+
+	R.setZero();
+	if (use_fixed_covariance_)
+		R(0,0) = R(1,1) = R(2,2) = n_zv_;
+	else
+	{
+		Eigen::Matrix<double, 6, 6> eigen_cov(poseMsg->pose.covariance.data());
+		R.block<3, 3> (0, 0) = eigen_cov.block<3, 3>(0, 0);
+	}
+		
+
+	// Preset noise level for q measurement from IMU estimate
+	R(3,3) = R(4,4) = R(5,5) = n_zq_;
 
 	z_q_ = R_sw * state_old.q_m_; // use IMU's internal q estimate as the FAKE measurement
 
@@ -266,7 +283,15 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	r_old.block<3, 1> (3, 0) = q_err.vec() / q_err.w()  * 2; // may not need  q_err.w()
 
 	if (velocity_measurement_)
-		std::cout << "z_v_ = " << std::endl << z_v_.transpose() << std::endl;
+	{
+		std::cout << "z_v_, raw, induced = " << std::endl << z_v_.transpose() << std::endl
+			 << z_v_raw_.transpose() << std::endl
+			 << z_v_induced_.transpose() << std::endl;
+
+		std::cout << "z_w_ = " << std::endl << z_w_.w() << ", " << z_w_.vec().transpose() << std::endl;
+		std::cout << "p_ic = " << p_ic.transpose() << std::endl;
+		std::cout << "rotation_vector = " << std::endl << rotation_vector.transpose() << std::endl;
+	}
 	else	
 		std::cout << "z_p_ = " << std::endl << z_v_.transpose() << std::endl;
 

@@ -95,13 +95,12 @@ int main(int argc, char** argv)
 	// ROS_INFO("Waiting for reset signal...");
 	// auto msgptr = ros::topic::waitForMessage<std_msgs::Header>("/reset",nh);
 
-	ros::Duration(2).sleep(); // wait for setup of network connection with other nodes
+	// std_msgs::Header header;
+	// header.stamp = ros::Time::now();
+	// _reset_pub.publish(header);
+	// ros::spinOnce();
 
-	std_msgs::Header header;
-	header.stamp = ros::Time::now();
-	_reset_pub.publish(header);
-	ros::spinOnce();
-
+	ros::Duration(0.5).sleep();
 	
 	while(ros::ok()){
 		spinner.start();
@@ -119,10 +118,11 @@ int main(int argc, char** argv)
 
 		ros::Time global_start = VisionPoseMeas.setGlobalStart();
 		ROS_INFO_STREAM("==============Global Start Time: " << std::fixed <<  global_start <<"==============");
-		// Reset VO integration to identity, therefore enable Measurement Callback
 
-
-		
+		// Send reset signal
+		std_msgs::Header header;
+		header.stamp = global_start;
+		_reset_pub.publish(header);
 
 		// ROS_WARN_STREAM("Done resetting VO integration, time: " << ros::Time::now());
 		

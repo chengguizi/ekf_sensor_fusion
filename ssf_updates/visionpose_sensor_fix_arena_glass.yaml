@@ -3,15 +3,15 @@ use_fixed_covariance: false
 pose_of_camera_not_imu: false # for ekf output
 
 
-use_imu_internal_q: false
-sigma_distance_scale: 10.0
+use_imu_internal_q: true
+sigma_distance_scale: 5
 
 max_state_measurement_variance_ratio: 1000
 
 scale_init: 1.0
-fixed_scale: true
+fixed_scale: false
 fixed_bias: false
-fixed_calib: true
+fixed_calib: false
 
 # for visensor imu
 # noise_acc: 0.01
@@ -29,7 +29,7 @@ noise_accbias: 0.005
 noise_gyr: 0.005
 noise_gyrbias:  0.00005
 
-noise_scale: 0.0
+noise_scale: 0.005
 noise_qwv: 0.0
 noise_qci: 0.0
 noise_pic: 0.0
@@ -37,9 +37,7 @@ delay: -0.03
 
 # for visensor measurement
 meas_noise1: 0.00000001
-meas_noise2: 0.01 #0.08
-
-#data_playback: true
+meas_noise2: 0.01
 
 # initialization of camera w.r.t. IMU
 init/q_ci/w: 0
