@@ -34,6 +34,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 #include <Eigen/Eigen>
+#include <Eigen/Dense>
 
 #include <ros/ros.h>
 #include <dynamic_reconfigure/server.h>
@@ -367,12 +368,25 @@ public:
 
 			std::cout << "P before update: " << std::endl << P.diagonal().transpose() << std::endl;
 
+			std::cout << "H_delayed: " << std::endl << H_delayed << std::endl;
+
 			S = H_delayed * StateBuffer_[idx_delaystate].P_ * H_delayed.transpose() + R_delayed;
 			K = P * H_delayed.transpose() * S.inverse();
 
-			// std::cout << "gain K.diagonal():" << std::endl << K.diagonal().transpose() << std::endl;
+			std::cout << "K: " << std::endl << K << std::endl;
+
+			auto debug_c1 = (K.block(15,0,1,3)) * (res_delayed.block(0,0,3,1));
+			auto debug_c2 = (K.block(15,3,1,3)) * (res_delayed.block(3,0,3,1));
 
 			correction_ = K * res_delayed;
+
+			static double correct_int = 0.0, correct_c1 = 0.0, correct_c2 = 0.0;
+			correct_c1 += debug_c1(0);
+			correct_c2 += debug_c2(0);
+			correct_int += correction_(15);
+			std::cout << "CORRECTION SCALE = " << correction_(15) << ", accumulated = " << correct_int << std::endl;
+			std::cout << "correct_c1 = " << correct_c1 << ", correct_c2 = " << correct_c2 << std::endl;
+
 			const ErrorStateCov KH = (ErrorStateCov::Identity() - K * H_delayed);
 			P = KH * P * KH.transpose() + K * R_delayed * K.transpose();
 

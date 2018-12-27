@@ -653,12 +653,12 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 
 	State & delaystate = StateBuffer_[idx_delaystate];
 
-	const auto buff_bw = delaystate.b_w_;
-	const auto buff_ba = delaystate.b_a_;
-	const auto buff_L = delaystate.L_;
-	const auto buff_qwv = delaystate.q_wv_;
-	const auto buff_qci = delaystate.q_ci_;
-	const auto buff_pic = delaystate.p_ci_;
+	// const auto buff_bw = delaystate.b_w_;
+	// const auto buff_ba = delaystate.b_a_;
+	// const auto buff_L = delaystate.L_;
+	// const auto buff_qwv = delaystate.q_wv_;
+	// const auto buff_qci = delaystate.q_ci_;
+	// const auto buff_pic = delaystate.p_ci_;
 
 	delaystate.p_ = delaystate.p_ + correction_.block<3, 1> (0, 0);
 	delaystate.v_ = delaystate.v_ + correction_.block<3, 1> (3, 0);
@@ -671,6 +671,7 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 	{
 		ROS_WARN_STREAM_THROTTLE(1,"Negative scale detected: " << delaystate.L_ << ". Correcting to 0.1");
 		delaystate.L_ = 0.1;
+		exit(-1);
 	}
 
 	auto qbuff_q = quaternionFromSmallAngle(correction_.block<3, 1> (6, 0));
@@ -690,44 +691,44 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 	delaystate.p_ci_ = delaystate.p_ci_ + correction_.block<3, 1> (22, 0);
 
 	// update qbuff_ and check for fuzzy tracking
-	if (qvw_inittimer_ > nBuff_)
-	{
-		// should be unit quaternion if no error
-		Eigen::Quaternion<double> errq = delaystate.q_wv_.conjugate() *
-				Eigen::Quaternion<double>(
-						getMedian(qbuff_.block<nBuff_, 1> (0, 3)),
-						getMedian(qbuff_.block<nBuff_, 1> (0, 0)),
-						getMedian(qbuff_.block<nBuff_, 1> (0, 1)),
-						getMedian(qbuff_.block<nBuff_, 1> (0, 2))
-						);
+	// if (qvw_inittimer_ > nBuff_)
+	// {
+	// 	// should be unit quaternion if no error
+	// 	Eigen::Quaternion<double> errq = delaystate.q_wv_.conjugate() *
+	// 			Eigen::Quaternion<double>(
+	// 					getMedian(qbuff_.block<nBuff_, 1> (0, 3)),
+	// 					getMedian(qbuff_.block<nBuff_, 1> (0, 0)),
+	// 					getMedian(qbuff_.block<nBuff_, 1> (0, 1)),
+	// 					getMedian(qbuff_.block<nBuff_, 1> (0, 2))
+	// 					);
 
-		if (std::max(errq.vec().maxCoeff(), -errq.vec().minCoeff()) / fabs(errq.w()) * 2 > fuzzythres) // fuzzy tracking (small angle approx)
-		{
-			ROS_WARN_STREAM_THROTTLE(1,"fuzzy tracking triggered: " << std::max(errq.vec().maxCoeff(), -errq.vec().minCoeff())/fabs(errq.w())*2 << " limit: " << fuzzythres <<"\n");
+	// 	if (std::max(errq.vec().maxCoeff(), -errq.vec().minCoeff()) / fabs(errq.w()) * 2 > fuzzythres) // fuzzy tracking (small angle approx)
+	// 	{
+	// 		ROS_WARN_STREAM_THROTTLE(1,"fuzzy tracking triggered: " << std::max(errq.vec().maxCoeff(), -errq.vec().minCoeff())/fabs(errq.w())*2 << " limit: " << fuzzythres <<"\n");
 
-			//state_.q_ = buff_q;
-			delaystate.b_w_ = buff_bw;
-			delaystate.b_a_ = buff_ba;
-			delaystate.L_ = buff_L;
-			delaystate.q_wv_ = buff_qwv;
-			delaystate.q_ci_ = buff_qci;
-			delaystate.p_ci_ = buff_pic;
-			correction_.block<16, 1> (9, 0) = Eigen::Matrix<double, 16, 1>::Zero();
-			qbuff_q.setIdentity();
-			qbuff_qwv.setIdentity();
-			qbuff_qci.setIdentity();
-		}
-		else // if tracking ok: update mean and 3sigma of past N q_vw's
-		{
-			qbuff_.block<1, 4> (qvw_inittimer_ - nBuff_ - 1, 0) = Eigen::Matrix<double, 1, 4>(delaystate.q_wv_.coeffs());
-			qvw_inittimer_ = (qvw_inittimer_) % nBuff_ + nBuff_ + 1;
-		}
-	}
-	else // at beginning get mean and 3sigma of past N q_vw's
-	{
-		qbuff_.block<1, 4> (qvw_inittimer_ - 1, 0) = Eigen::Matrix<double, 1, 4>(delaystate.q_wv_.coeffs());
-		qvw_inittimer_++;
-	}
+	// 		//state_.q_ = buff_q;
+	// 		delaystate.b_w_ = buff_bw;
+	// 		delaystate.b_a_ = buff_ba;
+	// 		delaystate.L_ = buff_L;
+	// 		delaystate.q_wv_ = buff_qwv;
+	// 		delaystate.q_ci_ = buff_qci;
+	// 		delaystate.p_ci_ = buff_pic;
+	// 		correction_.block<16, 1> (9, 0) = Eigen::Matrix<double, 16, 1>::Zero();
+	// 		qbuff_q.setIdentity();
+	// 		qbuff_qwv.setIdentity();
+	// 		qbuff_qci.setIdentity();
+	// 	}
+	// 	else // if tracking ok: update mean and 3sigma of past N q_vw's
+	// 	{
+	// 		qbuff_.block<1, 4> (qvw_inittimer_ - nBuff_ - 1, 0) = Eigen::Matrix<double, 1, 4>(delaystate.q_wv_.coeffs());
+	// 		qvw_inittimer_ = (qvw_inittimer_) % nBuff_ + nBuff_ + 1;
+	// 	}
+	// }
+	// else // at beginning get mean and 3sigma of past N q_vw's
+	// {
+	// 	qbuff_.block<1, 4> (qvw_inittimer_ - 1, 0) = Eigen::Matrix<double, 1, 4>(delaystate.q_wv_.coeffs());
+	// 	qvw_inittimer_++;
+	// }
 
 	// idx fiddeling to ensure correct update until now from the past
 

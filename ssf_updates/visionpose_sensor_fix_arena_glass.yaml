@@ -29,10 +29,10 @@ noise_accbias: 0.005
 noise_gyr: 0.005
 noise_gyrbias:  0.00005
 
-noise_scale: 0.005
+noise_scale: 0.0
 noise_qwv: 0.0
-noise_qci: 0.0
-noise_pic: 0.0
+noise_qci: 0.0002
+noise_pic: 0.001
 delay: -0.03
 
 # for visensor measurement
@@ -50,7 +50,7 @@ init/q_ci/z: 0.7071067812
 #  0     1     0
 
 
-init/p_ci/x: 0.035  
+init/p_ci/x: 0.03  
 init/p_ci/y: 0.05
 init/p_ci/z: 0
 

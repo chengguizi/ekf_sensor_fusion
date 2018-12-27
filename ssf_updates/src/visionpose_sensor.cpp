@@ -147,7 +147,7 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	measurements->ssf_core_.mutexLock();
 
 	std::cout << std::endl << "Measurement Callback for frame at " << time_old << std::endl;
-	std::cout << "measurement noise R = " << R.diagonal().transpose() << std::endl;
+	
 
 	// find closest predicted state in time which fits the measurement time
 	ssf_core::State* state_old_ptr = nullptr;
@@ -185,7 +185,7 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 
 
 	// The input velocity measurement is in camera's body frame, not imu's body frame, hence transformation is needed
-	Eigen::Matrix<double,3,1> z_v_raw_ = Eigen::Matrix<double,3,1>(poseMsg->pose.pose.position.x, poseMsg->pose.pose.position.y, poseMsg->pose.pose.position.z); 
+	Eigen::Matrix<double,3,1> z_v_ = Eigen::Matrix<double,3,1>(poseMsg->pose.pose.position.x, poseMsg->pose.pose.position.y, poseMsg->pose.pose.position.z); 
 
 	z_w_ = Eigen::Quaternion<double>(poseMsg->pose.pose.orientation.w, poseMsg->pose.pose.orientation.x, poseMsg->pose.pose.orientation.y, poseMsg->pose.pose.orientation.z);
 
@@ -193,11 +193,6 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	Eigen::AngleAxisd w_angleaxis(z_w_);
 	const Eigen::Vector3d rotation_vector = w_angleaxis.axis() * w_angleaxis.angle();
 
-	const Eigen::Vector3d p_ic = state_old.q_ci_.inverse() * (-state_old.p_ci_);
-
-	Eigen::Matrix<double,3,1> z_v_induced_ = rotation_vector.cross(p_ic);
-
-	z_v_ = z_v_raw_ + z_v_induced_;
 
 	R.setZero();
 	if (use_fixed_covariance_)
@@ -227,7 +222,7 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 		R(0,0) =  R(1,1) =  R(2,2) = P_v_avg / 30;
 	}
 
-	
+	std::cout << "measurement noise R = " << R.diagonal().transpose() << std::endl;
 
 
 	ROS_INFO_STREAM_THROTTLE(10, "state_old " << state_old );
@@ -236,6 +231,7 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 
 
 	H_old.setZero();
+	r_old.setZero();
 	auto _identity3 = Eigen::Matrix<double, 3, 3>::Identity();
 	// position:
 
@@ -254,8 +250,14 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 
 		H_old.block<3, 3> (0, 3) = R_ci.transpose() * R_iw.transpose() * state_old.L_; //  partial v_iw
 		H_old.block<3, 3> (0, 6) = R_ci.transpose() * v_skew * state_old.L_; // partial theta_iw
-		H_old.block<3, 1> (0, 15) = R_ci.transpose() * R_iw.transpose() * state_old.v_; // partial lambda
-		H_old.block<3, 3> (0, 19) = skew(R_ci.transpose() * R_iw.transpose()* state_old.v_) * state_old.L_;
+
+		H_old.block<3, 1> (0, 15) = R_ci.transpose() * R_iw.transpose() * state_old.v_ 
+			+ skew(rotation_vector) * R_ci.transpose() * state_old.p_ci_; // partial lambda
+
+		H_old.block<3, 3> (0, 19) = skew(R_ci.transpose() * R_iw.transpose()* state_old.v_) * state_old.L_ 
+			+ skew(rotation_vector) * skew (R_ci.transpose() * state_old.p_ci_) * state_old.L_; // partial theta_ci
+
+		H_old.block<3, 3> (0, 22) = skew(rotation_vector) * R_ci.transpose() * state_old.L_; // partial p_ci
 	}
 	
 
@@ -271,25 +273,36 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	{
 		Eigen::Matrix<double, 3, 3> R_ci = state_old.q_ci_.toRotationMatrix();
 		Eigen::Matrix<double, 3, 3> R_iw = state_old.q_.toRotationMatrix();
-		r_old.block<3, 1> (0, 0) = z_v_ - R_ci.transpose() * R_iw.transpose() * state_old.v_* state_old.L_;
+
+		Eigen::Vector3d v_r = skew(rotation_vector) * R_ci.transpose() * state_old.p_ci_ * state_old.L_;
+		Eigen::Vector3d v_i = R_ci.transpose() * R_iw.transpose() * state_old.v_* state_old.L_;
+		std::cout << "v_r = " << v_r.transpose() << std::endl;
+		std::cout << "v_i = " << v_i.transpose() << std::endl;
+		r_old.block<3, 1> (0, 0) = z_v_ - (v_r + v_i);
 	}
 	
 	// attitude
 	Eigen::Quaternion<double> q_err;
 	q_err = state_old.q_.conjugate() * z_q_;
+
+	// TODO: only extract yaw part of the error
 	q_err.normalize();
 
+	// Make w term always positive
 
-	r_old.block<3, 1> (3, 0) = q_err.vec() / q_err.w()  * 2; // may not need  q_err.w()
+	if (std::signbit(q_err.w()))
+		r_old.block<3, 1> (3, 0) =  -q_err.vec() *  2.0; // may not need  q_err.w(), BUT IF NOT INCLUDE w, sometime things diverges!
+	else
+		r_old.block<3, 1> (3, 0) =  q_err.vec() *  2.0;
+
+	// DEBUG
+	// std::cout << "q_err.w() = " << q_err.w()  << ", sign = " << std::signbit(q_err.w()) << std::endl;
 
 	if (velocity_measurement_)
 	{
-		std::cout << "z_v_, raw, induced = " << std::endl << z_v_.transpose() << std::endl
-			 << z_v_raw_.transpose() << std::endl
-			 << z_v_induced_.transpose() << std::endl;
+		std::cout << "z_v_" << std::endl << z_v_.transpose() << std::endl;
 
 		std::cout << "z_w_ = " << std::endl << z_w_.w() << ", " << z_w_.vec().transpose() << std::endl;
-		std::cout << "p_ic = " << p_ic.transpose() << std::endl;
 		std::cout << "rotation_vector = " << std::endl << rotation_vector.transpose() << std::endl;
 	}
 	else	
