@@ -254,6 +254,10 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 		H_old.block<3, 1> (0, 15) = R_ci.transpose() * R_iw.transpose() * state_old.v_ 
 			+ skew(rotation_vector) * R_ci.transpose() * state_old.p_ci_; // partial lambda
 
+		std::cout << "H_old scale terms = " << (H_old.block<3, 1> (0, 15)).transpose() << std::endl;
+
+		// H_old.block<3, 1> (0, 15) << 0,0,0;
+
 		H_old.block<3, 3> (0, 19) = skew(R_ci.transpose() * R_iw.transpose()* state_old.v_) * state_old.L_ 
 			+ skew(rotation_vector) * skew (R_ci.transpose() * state_old.p_ci_) * state_old.L_; // partial theta_ci
 

@@ -29,7 +29,7 @@ noise_accbias: 0.005
 noise_gyr: 0.005
 noise_gyrbias:  0.00005
 
-noise_scale: 0.0
+noise_scale: 0.005
 noise_qwv: 0.0
 noise_qci: 0.0002
 noise_pic: 0.001
