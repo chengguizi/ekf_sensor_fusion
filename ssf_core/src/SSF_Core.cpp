@@ -217,7 +217,7 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 	// get inputs
 	StateBuffer_[idx_state_].a_m_ << msg->linear_acceleration.x, msg->linear_acceleration.y, msg->linear_acceleration.z;
 	StateBuffer_[idx_state_].w_m_ << msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z;
-	StateBuffer_[idx_state_].m_m_ << msg_mag->magnetic_field.x, msg_mag->magnetic_field.z, msg_mag->magnetic_field.z;
+	StateBuffer_[idx_state_].m_m_ << msg_mag->magnetic_field.x, msg_mag->magnetic_field.y, msg_mag->magnetic_field.z;
 	StateBuffer_[idx_state_].q_m_ = Eigen::Quaternion<double>(msg->orientation.w, msg->orientation.x, msg->orientation.y, msg->orientation.z); 
 	StateBuffer_[idx_state_].q_m_.normalize();
 	// DEBUG
@@ -253,9 +253,11 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 		ROS_ERROR_STREAM("large time-gap detected, resetting previous state to current state time: "
 		 << (long long)(StateBuffer_[idx_state_].time_ * 1e9) << ", " << 
 		 (long long)(StateBuffer_[(unsigned char)(idx_state_ - 1)].time_ * 1e9) << ", state = " << (unsigned int)idx_state_ << ", abs = " << std::abs(StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_) << ", normal = " << StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_);
-		StateBuffer_[(unsigned char)(idx_state_ - 1)].time_ = StateBuffer_[(idx_state_)].time_;
+		StateBuffer_[(unsigned char)(idx_state_ - 1)].time_ = StateBuffer_[(idx_state_)].time_ - 1.0e-4; // double has 15 digits of significant figure
 		// exit(-1);
 	}
+
+	// std::cout  << "dt = " << StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_ << std::endl;
 
 	propagateState(StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_); 
 	// StateBuffer_[idx_state_] = StateBuffer_[(unsigned char)(idx_state_ - 1)];
@@ -481,12 +483,12 @@ void SSF_Core::predictProcessCovariance(const double dt)
 	ConstVector3 ea = cur_state.a_m_ - cur_state.b_a_; // hm: why not minus away the gravity?
 	ConstVector3 eaold = prev_state.a_m_ - prev_state.b_a_; // estimated acceleration of previous state
 	ConstVector3 ea_avg = (cur_state.q_.toRotationMatrix() * ea + prev_state.q_.toRotationMatrix() * eaold) / 2.0;
-	// HM: FIXED SMALL Z VARIANCE ISSUE
-	ConstMatrix3 a_sk = skew(ea_avg - g_); //skew(ea); 
+	// HM: FIXED SMALL Z VARIANCE ISSUE ==> WRONG??
+	ConstMatrix3 a_sk = skew(ea); // skew(ea_avg - g_); //skew(ea); 
 	ConstMatrix3 w_sk = skew(ew_avg); // skew(ew);
 	ConstMatrix3 eye3 = Eigen::Matrix<double, 3, 3>::Identity();
 
-	//ConstMatrix3 C_eq = StateBuffer_[idx_P_].q_.toRotationMatrix();
+	// ConstMatrix3 C_eq = StateBuffer_[idx_P_].q_.toRotationMatrix();
 	ConstMatrix3 C_eq = (cur_state.q_.toRotationMatrix() + prev_state.q_.toRotationMatrix()) / 2.0;
 
 	const double dt_p2_2 = dt * dt * 0.5; // dt^2 / 2
@@ -533,11 +535,19 @@ void SSF_Core::predictProcessCovariance(const double dt)
 	Fd_.block<3, 3> (6, 6) = E;
 	Fd_.block<3, 3> (6, 9) = F;
 
+	Qd_.setZero(); // hm: reset to zero
 	calc_Q(dt, StateBuffer_[idx_P_].q_, ew, ea, nav, nbav, nwv, nbwv, config_.noise_scale, nqwvv, nqciv, npicv, Qd_);
 
-	// ROS_INFO_STREAM("Qd_.diagonal():\n" << Qd_.diagonal().transpose());
+	// ROS_INFO_STREAM("Qd_.diagonal() with dt = " << dt << std::endl << Qd_.diagonal().transpose() );
+
+	// Qd_ = Qd_.diagonal().eval().asDiagonal();
+
+	// ROS_INFO_STREAM("Qd_ with dt = " << dt << std::endl << Qd_);
 
 	StateBuffer_[idx_P_].P_ = Fd_ * StateBuffer_[(unsigned char)(idx_P_ - 1)].P_ * Fd_.transpose() + Qd_;
+
+	// hm: make it symmetrical
+	// StateBuffer_[idx_P_].P_  = 0.5 * ( StateBuffer_[idx_P_].P_  + StateBuffer_[idx_P_].P_.transpose());
 
 	idx_P_++;
 }

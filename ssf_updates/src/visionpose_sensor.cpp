@@ -162,8 +162,8 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 
 			if (ret == ssf_core::TOO_EARLY){
 				measurements->ssf_core_.mutexUnlock();
-				ROS_INFO("Wait 200ms as VO is too fast");
-				ros::Duration(0.2).sleep();
+				ROS_INFO("Wait 100ms as VO is too fast");
+				ros::Duration(0.1).sleep();
 				measurements->ssf_core_.mutexLock();
 			}
 				
@@ -187,6 +187,10 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	// The input velocity measurement is in camera's body frame, not imu's body frame, hence transformation is needed
 	Eigen::Matrix<double,3,1> z_v_ = Eigen::Matrix<double,3,1>(poseMsg->pose.pose.position.x, poseMsg->pose.pose.position.y, poseMsg->pose.pose.position.z); 
 
+
+	// DEBUG, scale velocity measurement
+	// z_v_ = z_v_ * 4;
+
 	z_w_ = Eigen::Quaternion<double>(poseMsg->pose.pose.orientation.w, poseMsg->pose.pose.orientation.x, poseMsg->pose.pose.orientation.y, poseMsg->pose.pose.orientation.z);
 
 	// velocity = angular-velocity * radius
@@ -209,8 +213,8 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 
 	z_q_ = R_sw * state_old.q_m_; // use IMU's internal q estimate as the FAKE measurement
 
-	double P_v_avg = state_old.P_(3,3) + state_old.P_(4,4) + state_old.P_(5,5) / 3.0;
-	double P_q_avg = state_old.P_(6,6) + state_old.P_(7,7) + state_old.P_(8,8) / 3.0;
+	double P_v_avg = (state_old.P_(3,3) + state_old.P_(4,4) + state_old.P_(5,5)) / 3.0;
+	double P_q_avg = (state_old.P_(6,6) + state_old.P_(7,7) + state_old.P_(8,8)) / 3.0;
 
 	ROS_INFO_STREAM_THROTTLE(15,"P_v_avg=" << P_v_avg << ", R=" << R(0,0));
 	ROS_INFO_STREAM_THROTTLE(15,"P_q_avg=" << P_q_avg << ", R=" << R(3,3));
@@ -218,8 +222,8 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	// Make sure the variance are not differ by too much
 	if (P_v_avg > R(0,0) * max_state_measurement_variance_ratio_)
 	{
-		ROS_WARN_STREAM("R resets to " << P_v_avg / 30 << " from " << R(0,0) );
-		R(0,0) =  R(1,1) =  R(2,2) = P_v_avg / 30;
+		ROS_WARN_STREAM("R resets to " << P_v_avg / max_state_measurement_variance_ratio_ << " from " << R(0,0) );
+		R(0,0) =  R(1,1) =  R(2,2) = P_v_avg / max_state_measurement_variance_ratio_;
 	}
 
 	std::cout << "measurement noise R = " << R.diagonal().transpose() << std::endl;
@@ -256,7 +260,8 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 
 		std::cout << "H_old scale terms = " << (H_old.block<3, 1> (0, 15)).transpose() << std::endl;
 
-		// H_old.block<3, 1> (0, 15) << 0,0,0;
+		// H_old(0, 15) = 0;
+		// H_old(1, 15) = 0;
 
 		H_old.block<3, 3> (0, 19) = skew(R_ci.transpose() * R_iw.transpose()* state_old.v_) * state_old.L_ 
 			+ skew(rotation_vector) * skew (R_ci.transpose() * state_old.p_ci_) * state_old.L_; // partial theta_ci
@@ -268,6 +273,7 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	// attitude
 	H_old.block<3, 3> (3, 6) = _identity3;  // q
 
+	// static double debug_lambda_scale = 0;
 	// position
 	if (!velocity_measurement_)
 	{
@@ -283,6 +289,15 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 		std::cout << "v_r = " << v_r.transpose() << std::endl;
 		std::cout << "v_i = " << v_i.transpose() << std::endl;
 		r_old.block<3, 1> (0, 0) = z_v_ - (v_r + v_i);
+
+		// double scale = z_v_.norm() / state_old.v_.norm() ;
+
+		// if (debug_lambda_scale == 0 )
+		// 	debug_lambda_scale = scale;
+		// else
+		// 	debug_lambda_scale = 0.1*scale + 0.9*debug_lambda_scale;
+		
+		// std::cout << "debug_lambda_scale=" << debug_lambda_scale << std::endl;
 	}
 	
 	// attitude
@@ -326,22 +341,31 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	}
 
 	// check for velocity measurement outliers, using variance
-
 	double velocity_err_distance = r_old.block<3, 1>(0, 0).norm();
-	double sigma_distance = sigma_distance_scale * ( R(0,0) + state_old.P_.diagonal().block<3,1>(3,0).norm() );
-
+	const double velocity_variance = state_old.P_.diagonal().block<3,1>(3,0).norm();
+	double sigma_distance = sigma_distance_scale * ( R(0,0) + velocity_variance);
 	ROS_INFO_STREAM_THROTTLE(2, "vel error = " << velocity_err_distance << ", " << sigma_distance_scale << "sigma distance = " << sigma_distance);
-	if (velocity_err_distance > sigma_distance)
+	if (velocity_variance < R(0,0) && velocity_err_distance > sigma_distance)
 	{
-		ROS_WARN_STREAM("Big Velocity Difference Detected: " << velocity_err_distance << ", compared to sigma-distance: " << sigma_distance );
+		ROS_WARN_STREAM("Big Velocity Difference Detected: " << velocity_err_distance << ", compared to sigma-distance: " << sigma_distance << ", variance P.v.norm() =" << velocity_variance );
 		do_update = false;
 	}
 
-	if ( (state_old.v_ - state_old_ptr->v_).norm() > 3 )
+	//// Check for angular velocity measurement outliers, using variance
+	Eigen::Matrix<double, 3, 3> R_ci = state_old.q_ci_.toRotationMatrix();
+	double w_err_distance = (state_old.w_m_ - R_ci * rotation_vector).norm();
+	double w_sigma_distance = sigma_distance_scale * 0.02;
+	if (w_err_distance > w_sigma_distance)
 	{
-		ROS_WARN("BAD Velocity (v_), skipping update");
+		ROS_WARN_STREAM("Big Angular V Difference Detected: " << w_err_distance << "(" << (R_ci * rotation_vector).transpose() << "), compared to sigma-distance: " << w_sigma_distance );
 		do_update = false;
 	}
+
+	// if ( (state_old.v_ - state_old_ptr->v_).norm() > 3 )
+	// {
+	// 	ROS_WARN("BAD Velocity (v_), skipping update");
+	// 	do_update = false;
+	// }
 
 
 	if (do_update)

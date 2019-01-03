@@ -92,6 +92,7 @@ template<class Derived>
 
     if ( q_squared < 1)
     {
+      // hm: this algorithm ensures the theta terms are not scaled; on the contrary, only the w term is calculated from the existing vector's squared norm.
       return Eigen::Quaternion<Scalar>(sqrt(1 - q_squared), theta[0] * 0.5, theta[1] * 0.5, theta[2] * 0.5).normalized();
     }
     else
