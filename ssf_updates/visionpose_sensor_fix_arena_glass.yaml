@@ -2,7 +2,7 @@ velocity_measurement: true # velocity instead of delta pose change
 use_fixed_covariance: false
 pose_of_camera_not_imu: false # for ekf output
 
-
+imu_frame: NED # NED, ENU, NWU
 use_imu_internal_q: true
 sigma_distance_scale: 5
 
@@ -60,7 +60,6 @@ init/p_ci/z: 0
 # 0 , 1 , 0,
 # 1 , 0 , 0,
 # 0 , 0 , -1;
-
 init/q_sw/w: 0.0
 init/q_sw/x: 0.7071068
 init/q_sw/y: 0.7071068

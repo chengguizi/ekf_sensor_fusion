@@ -292,6 +292,13 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 	pubPose_.publish(msgPose_);
 	pubPose_local_.publish(msgPose_local_);
 
+	// publish state out
+	msgState_.header.stamp = ros::Time().fromSec(updated_state.time_);
+	msgState_.header.seq = updated_state.seq_;
+	msgState_.delay_measurement = 0; //(msgState_.header.stamp - msg_header.stamp).toSec() ;
+	updated_state.toStateMsg(msgState_);
+	pubState_.publish(msgState_);
+
 	// publish transforms to help initialising VO
 	// broadcast_ci_transformation((unsigned char)(idx_state_ - 1),msgPose_.header.stamp);
 	// broadcast_iw_transformation((unsigned char)(idx_state_ - 1),msgPose_.header.stamp);
@@ -448,7 +455,7 @@ void SSF_Core::propagateState(const double dt)
 	}
 	
 
-	
+
 	idx_state_++;  // hm: unsigned char, so will automatically become a ring buffer
 }
 
@@ -655,7 +662,7 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 
 	// assert( !( config_.fixed_scale || config_.fixed_bias || config_.fixed_calib ) );
 
-	// ROS_WARN_STREAM("\ncorrection_ " << correction_.transpose() );
+	ROS_WARN_STREAM("\ncorrection_ " << correction_.transpose() );
 	// state update:
 
 	// store old values in case of fuzzy tracking
@@ -763,14 +770,7 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 
 	// ROS_WARN_STREAM("applyCorrection(): now at state time = " << (long long)(StateBuffer_[(unsigned char)(idx_state_ - 1)].time_ * 1e9) << ", state = " << (unsigned int)(idx_state_-1));
 
-	// publish state
-	const unsigned char idx = (unsigned char)(idx_state_ - 1); // Hm: This is the most recent idx, with IMU
 
-	msgState_.header.stamp = ros::Time().fromSec(StateBuffer_[idx].time_);
-	msgState_.header.seq = StateBuffer_[idx].seq_;
-	msgState_.delay_measurement = (msgState_.header.stamp - msg_header.stamp).toSec() ;
-	StateBuffer_[idx].toStateMsg(msgState_);
-	pubState_.publish(msgState_);
 
 	// HM: publicise the most accurate estimate, after correction
 	msgPoseCorrected_.header.stamp = msg_header.stamp;

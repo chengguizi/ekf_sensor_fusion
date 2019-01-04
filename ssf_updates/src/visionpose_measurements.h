@@ -36,6 +36,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ssf_core/measurement.h>
 #include "visionpose_sensor.h"
 
+#include <string>
 #include <cmath> // for M_PI
 #include <vector>
 
@@ -62,7 +63,8 @@ public:
 		// - it also inherit and public SSF_Core() instance: ssf_core_. this is how SSF_core is engaged
 
 		ros::NodeHandle pnh("~");
-                pnh.param("use_imu_internal_q", use_imu_internal_q, false);
+		pnh.param("use_imu_internal_q", use_imu_internal_q, false);
+		pnh.param<std::string>("imu_frame", imu_frame, "NED");
 
 
 		pnh.param("init/p_ci/x", p_ci_[0], 0.0);
@@ -82,10 +84,10 @@ public:
 		q_wv_.normalize();
 
 		Eigen::Quaternion<double> q_sw_;
-                pnh.getParam("init/q_sw/w", q_sw_.w());
-                pnh.getParam("init/q_sw/x", q_sw_.x());
-                pnh.getParam("init/q_sw/y", q_sw_.y());
-                pnh.getParam("init/q_sw/z", q_sw_.z());
+		pnh.getParam("init/q_sw/w", q_sw_.w());
+		pnh.getParam("init/q_sw/x", q_sw_.x());
+		pnh.getParam("init/q_sw/y", q_sw_.y());
+		pnh.getParam("init/q_sw/z", q_sw_.z());
 		q_sw_.normalize();
 
 		R_sw = q_sw_.toRotationMatrix();
@@ -112,6 +114,7 @@ public:
 		ROS_INFO_STREAM("q_wv_: (w,x,y,z): [" << q_wv_.w() << ", " << q_wv_.x() << ", " << q_wv_.y() << ", " << q_wv_.z()  << "]");
 		ROS_INFO_STREAM("R_sw: " << std::endl << R_sw);
 		ROS_INFO_STREAM("scale_: " << scale_);
+		ROS_INFO_STREAM("imu_frame: " << imu_frame);
 	}
 
 	bool initStateZero(struct ssf_core::ImuInputsCache& imuEstimateMean)
@@ -128,8 +131,11 @@ public:
 			// if there is no magnetometer input, set it to x direction
 			if (imuEstimateMean.m_m_.isZero())
 			{
-				ROS_WARN("There is no magnetometer readings, assume North is in +Y-axis");
-				normalvec_m << 0, 1, 0;
+				// ROS_WARN("There is no magnetometer readings, assume North is in +Y-axis"); // NED
+				// normalvec_m << 0, 1, 0; // NED
+
+				ROS_WARN("There is no magnetometer readings, assume North is in +X-axis"); // NWU
+				normalvec_m << 1, 0, 0; // NWU
 			}else{ // there is readings
 				normalvec_m = imuEstimateMean.m_m_.normalized().array();
 			}
@@ -168,13 +174,27 @@ public:
 			Eigen::Vector3d normalvec_east = normalvec_down.cross(normalvec_north).normalized();
 
 			
-			// rotation matrix R_wi represents the world frame (NED) coordinate in IMU-Frame
+			// rotation matrix R_wi represents the world frame coordinate in IMU-Frame
 			std::cout << "normalvec_north: " << normalvec_north.transpose() << std::endl;
 			std::cout << "normalvec_east: " << normalvec_east.transpose() << std::endl;
 			std::cout << "normalvec_down: " << normalvec_down.transpose() << std::endl;
 
 			Eigen::Matrix3d R_si, R_is;
-			R_si << normalvec_north, normalvec_east, normalvec_down;
+
+			if (imu_frame == "NED"){
+				// NED convention
+				R_si << normalvec_north, normalvec_east, normalvec_down;
+			}else if (imu_frame == "NWU"){
+				// NWU convention
+				R_si << normalvec_north, -normalvec_east, -normalvec_down;
+			}else if (imu_frame == "ENU"){
+				// ENU convention
+				R_si << normalvec_east, normalvec_north, -normalvec_down;
+			}else{
+				ROS_ERROR_STREAM("Unkown Frame: " << imu_frame);
+			}
+
+			ROS_WARN_STREAM("Using frame: " << imu_frame);
 
 			R_wi = R_si * R_sw.transpose();
 
@@ -198,7 +218,7 @@ public:
 		q_wv_ = q_iw_.inverse();
 
 		g_ << 0, 0, (R_iw*imuEstimateMean.a_m_)(2) ; // gravity is in z-axis, using ENU coordinate
-		std::cout << "g_ = " << std::endl << g_.transpose() << ", a_m_ norm = " << imuEstimateMean.a_m_.norm() << std::endl;
+		std::cout << "g_ = " << std::endl << g_.transpose() << std::endl << "a_m_ norm = " << imuEstimateMean.a_m_.norm() << std::endl;
 
 		//////////////////////////////////
 		/// Bias Estimation
@@ -371,21 +391,23 @@ private:
 	Eigen::Quaternion<double> q_m_;
 
 	double scale_;
-        bool use_imu_internal_q;
+
+    bool use_imu_internal_q;
+	std::string imu_frame;
 
 	ssf_core::SSF_Core::ErrorStateCov P_;
 
 	bool init()
 	{
-		std::cout << "calculated q_iw_ = " << q_iw_.coeffs().transpose() << std::endl; // x,y,z,w
+		std::cout << "calculated q_iw_ = " << q_iw_.w() << ", " << q_iw_.vec().transpose() << std::endl; // w, x y z
 
 		auto q_iw_m_ = Eigen::Quaternion<double>(R_sw)*q_m_;
-		std::cout << "compared to measured R_sw * q_m_" << q_iw_m_.coeffs().transpose() << std::endl;
+		std::cout << "compared to measured R_sw * q_m_ = " << q_iw_m_.w() << ", " << q_iw_m_.vec().transpose() << std::endl;
 
 
 		double dev = 180.0/M_PI*std::acos( 2 * std::pow(q_iw_m_.coeffs().dot(q_iw_.coeffs()),2.0) - 1.0 );
 
-		ROS_INFO_STREAM("Deviation Angle = " << dev << "degree");
+		ROS_INFO_STREAM("Deviation Angle = " << dev << " degree");
 		if ( std::abs(dev) > 45 ){ // check consistency with IMU's internal state, 10%
 			ROS_INFO_STREAM("Deviation Angle too big, try again.");
 			return false;
