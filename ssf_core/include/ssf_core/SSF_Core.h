@@ -184,6 +184,7 @@ private:
 
 
 	const static int nFullState_ = 28; ///< complete state
+	const static int nMeasurement_ = 13; // measurements from imu
 	const static int nBuff_ = 30; ///< buffer size for median q_vw
 	const static int nMaxCorr_ = 50; ///< number of IMU measurements buffered for time correction actions
 	const static int QualityThres_ = 1e3;

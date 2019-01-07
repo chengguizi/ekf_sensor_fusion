@@ -55,7 +55,7 @@ SSF_Core::SSF_Core() : imu_received_(0), mag_received_(0)
 	pubIntPose_ = nh_local.advertise<geometry_msgs::PoseWithCovarianceStamped> ("pose_integrated", 3);
 	//pubPoseCrtl_ = nh.advertise<sensor_fusion_comm::ExtState> ("ext_state", 1);
 
-	msgState_.data.resize(nFullState_ + N_STATE, 0);
+	msgState_.data.resize(nFullState_ + N_STATE + nMeasurement_, 0);
 
 	subImu_.subscribe(nh_local,"imu_state_input", 20);
 	subMag_.subscribe(nh_local,"mag_state_input", 20);
@@ -625,6 +625,9 @@ ClosestStateStatus SSF_Core::getClosestState(State*& timestate, ros::Time tstamp
 
 void SSF_Core::propPToIdx(unsigned char idx)
 {
+	assert (idx_P_ == idx_state_);
+	return;
+
 	// propagate cov matrix until idx
 	if (idx<idx_state_ && (idx_P_<=idx || idx_P_>idx_state_))	//need to propagate some covs
 		while (idx!=(unsigned char)(idx_P_-1))
@@ -762,6 +765,11 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 		// idx_state_ is current state, idx_state_ - 1 is previous state
 		// idx_state_++ is performed after the routine
 		propagateState(StateBuffer_[idx_state_].time_ - StateBuffer_[(unsigned char)(idx_state_ - 1)].time_);
+		
+		// hm: added this
+		predictProcessCovariance(StateBuffer_[idx_P_].time_ - StateBuffer_[(unsigned char)(idx_P_ - 1)].time_);
+
+		assert(idx_P_ == idx_state_);
 	}
 		
  

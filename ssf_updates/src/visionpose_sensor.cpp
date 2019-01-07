@@ -136,10 +136,6 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	Eigen::Matrix<double, N_MEAS, 1> r_old;
 	Eigen::Matrix<double, N_MEAS, N_MEAS> R;
 
-
-
-	
-
 	//////////////////////////////////////////////////////////////////
 	//////// Start mutex
 	/////////////////////////////////////////////////////////////////
@@ -342,19 +338,24 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 
 	// check for velocity measurement outliers, using variance
 	double velocity_err_distance = r_old.block<3, 1>(0, 0).norm();
-	const double velocity_variance = state_old.P_.diagonal().block<3,1>(3,0).norm();
-	double sigma_distance = sigma_distance_scale * ( R(0,0) + velocity_variance);
+
+	const double velocity_std_dev = std::sqrt(state_old.P_.diagonal().block<3,1>(3,0).norm());
+	const double velocity_measurement_std_dev = std::sqrt(R(0,0));
+	double sigma_distance = sigma_distance_scale * ( velocity_measurement_std_dev + velocity_std_dev);
 	ROS_INFO_STREAM_THROTTLE(2, "vel error = " << velocity_err_distance << ", " << sigma_distance_scale << "sigma distance = " << sigma_distance);
-	if (velocity_variance < R(0,0) && velocity_err_distance > sigma_distance)
+	if (velocity_std_dev < velocity_measurement_std_dev && velocity_err_distance > sigma_distance)
 	{
-		ROS_WARN_STREAM("Big Velocity Difference Detected: " << velocity_err_distance << ", compared to sigma-distance: " << sigma_distance << ", variance P.v.norm() =" << velocity_variance );
+		ROS_WARN_STREAM("Big Velocity Difference Detected: " << velocity_err_distance << ", compared to sigma-distance: " << sigma_distance << ", variance P.v.norm() =" << velocity_std_dev );
 		do_update = false;
 	}
 
 	//// Check for angular velocity measurement outliers, using variance
 	Eigen::Matrix<double, 3, 3> R_ci = state_old.q_ci_.toRotationMatrix();
-	double w_err_distance = (state_old.w_m_ - R_ci * rotation_vector).norm();
-	double w_sigma_distance = sigma_distance_scale * 0.02;
+
+	// this distance is between greater than zero
+	double w_err_distance = (state_old.w_m_ - R_ci * rotation_vector).norm() / (rotation_vector.norm() + 0.1);
+
+	double w_sigma_distance = sigma_distance_scale * 0.1;
 	if (w_err_distance > w_sigma_distance)
 	{
 		ROS_WARN_STREAM("Big Angular V Difference Detected: " << w_err_distance << "(" << (R_ci * rotation_vector).transpose() << "), compared to sigma-distance: " << w_sigma_distance );

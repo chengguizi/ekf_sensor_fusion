@@ -193,6 +193,22 @@ void State::toStateMsg(sensor_fusion_comm::DoubleArrayStamped & state)
 	state.data[51] = P_(23,23);
 	state.data[52] = P_(24,24);
 
+	state.data[53] = a_m_[0];
+	state.data[54] = a_m_[1];
+	state.data[55] = a_m_[2];
+
+	state.data[56] = w_m_[0];
+	state.data[57] = w_m_[1];
+	state.data[58] = w_m_[2];
+
+	state.data[59] = m_m_[0];
+	state.data[60] = m_m_[1];
+	state.data[61] = m_m_[2];
+
+	state.data[62] = q_m_.w();
+	state.data[63] = q_m_.x();
+	state.data[64] = q_m_.y();
+	state.data[65] = q_m_.z();
 
 }
 

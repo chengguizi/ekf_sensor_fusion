@@ -226,9 +226,10 @@ public:
 
 		Eigen::Vector3d g_imu = imuEstimateMean.a_m_.array();
 
-		b_a_ = R_wi * (R_iw * g_imu - g_);	// use estimated bias as the initial state
-		// b_a_ << 0, 0, 0;
+		// b_a_ = R_wi * (R_iw * g_imu - g_);	// use estimated bias as the initial state
+		b_a_ << 0, 0, 0;
 
+		// hm: initial value of w bias is VERY IMPORTANT!
 		b_w_ = imuEstimateMean.w_m_.array(); // use estimated bias as the initial state
 		// b_w_ << 0, 0, 0;
 
@@ -440,13 +441,13 @@ private:
 		P_.setZero(); // error state covariance; if zero, a default initialization in ssf_core is used
 		double init_np = 0;
 		double init_nv = 0.0;
-		double init_nq = 0.05;
-		double init_nbw = 0.005;
-		double init_nba = 0.1;
-		double init_L = 0.0001;
+		double init_nq = 0.02;
+		double init_nbw = 0.0005;
+		double init_nba = 0.05;
+		double init_L = 0.0;
 		double init_qwv = 0;
-		double init_qci = 0.001;
-		double init_pci = 0.01;
+		double init_qci = 0.0005;
+		double init_pci = 0.005;
 		Eigen::Vector3d initvar_p(Eigen::VectorXd::Ones(3)			*	init_np*init_np); // initial position is known
 		Eigen::Vector3d initvar_v(Eigen::VectorXd::Ones(3)			*	init_nv*init_nv); // variance of 1 m/s
 		Eigen::Vector3d initvar_q_err(Eigen::VectorXd::Ones(3)		*	init_nq*init_nq); // TODO: HOW TO ESTIMATE THIS?

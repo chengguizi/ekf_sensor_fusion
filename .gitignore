@@ -1,2 +1,4 @@
 .vscode
 matlab_gen/build/*
+ssf_updates/matlab/*.bag
+*.m~
