@@ -446,7 +446,7 @@ private:
 		double init_nba = 0.05;
 		double init_L = 0.0;
 		double init_qwv = 0;
-		double init_qci = 0.0005;
+		double init_qci = 0.001;
 		double init_pci = 0.005;
 		Eigen::Vector3d initvar_p(Eigen::VectorXd::Ones(3)			*	init_np*init_np); // initial position is known
 		Eigen::Vector3d initvar_v(Eigen::VectorXd::Ones(3)			*	init_nv*init_nv); // variance of 1 m/s

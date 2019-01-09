@@ -26,8 +26,8 @@ noise_gyrbias:  0.00002
 
 noise_scale: 0.0001
 noise_qwv: 0.0
-noise_qci: 0.005
-noise_pic: 0.00002
+noise_qci: 0.000002
+noise_pic: 0.0005
 delay: 0
 
 # for visensor measurement

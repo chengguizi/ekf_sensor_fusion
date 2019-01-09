@@ -5,7 +5,7 @@ close all;
 clc;
 
 if ~ exist('bag', 'var')
-    bag = rosbag('/home/dhl/git/catkin_ws/src/ekf_sensor_fusion/ssf_updates/matlab/ddrone.bag');
+    bag = rosbag('/home/dhl/git/catkin_ws/src/ekf_sensor_fusion/ssf_updates/matlab/ddrone.bag'); % realsense
 end
 
 % rosgenmsg('/home/dhl/git/catkin_ws/src/ekf_sensor_fusion/')
@@ -250,7 +250,7 @@ legend('Pq_x','Pq_y','Pq_z');
 %% plot bias w
 f3 = figure('Name', 'Biases');
 
-subplot(5,1,1)
+subplot(6,1,1)
 hold on
 grid on
 
@@ -265,7 +265,7 @@ legend('bw_x','bw_y','bw_z');
 
 %% plot P of bias w
 
-subplot(5,1,2)
+subplot(6,1,2)
 hold on
 grid on
 
@@ -281,7 +281,7 @@ legend('Pbw_x','Pbw_y','Pbw_z');
 
 %% plot bias a
 
-subplot(5,1,3)
+subplot(6,1,3)
 hold on
 grid on
 
@@ -297,7 +297,7 @@ legend('ba_x','ba_y','ba_z');
 
 %% plot P of bias a
 
-subplot(5,1,4)
+subplot(6,1,4)
 hold on
 grid on
 
@@ -312,7 +312,7 @@ legend('Pba_x','Pba_y','Pba_z');
 
 %% plot scale lambda
 
-subplot(5,1,5)
+subplot(6,1,5)
 hold on
 grid on
 
@@ -321,12 +321,22 @@ plot(ts_lambda);
 title('State: Scale Lambda');
 legend('L');
 
+%% plot variance scale lambda
+
+subplot(6,1,6)
+hold on
+grid on
+
+ts_P_l = timeseries(P_l(:));
+plot(ts_P_l);
+title('Variance: Scale Lambda');
+legend('L');
 
 %% plot magnetic vector
 
 f4 = figure('Name', 'Others');
 
-subplot(3,1,1)
+subplot(5,1,1)
 hold on
 grid on
 ts_m_m = timeseries(m_m(:,1));
@@ -341,7 +351,7 @@ legend('m_x','m_y','m_z');
 
 %% plot calibration p_ci
 
-subplot(3,1,2)
+subplot(5,1,2)
 hold on
 grid on
 
@@ -354,10 +364,25 @@ plot(ts_p_ci);
 title('State: Calibration p_{ci}');
 legend('pci_x','pci_y','pci_z');
 
+%% plot variance calibration p_ci
+
+subplot(5,1,3)
+hold on
+grid on
+
+ts_P_pci = timeseries(P_pci(:,1));
+plot(ts_P_pci);
+ts_P_pci = timeseries(P_pci(:,2));
+plot(ts_P_pci);
+ts_P_pci = timeseries(P_pci(:,3));
+plot(ts_P_pci);
+title('Variance: Calibration Pp_{ci}');
+legend('Ppci_x','Ppci_y','Ppci_z');
+
 
 %% plot calibration q_ci
 
-subplot(3,1,3)
+subplot(5,1,4)
 hold on
 grid on
 
@@ -371,3 +396,18 @@ ts_q_ci = timeseries(q_ci(:,4));
 plot(ts_q_ci);
 title('State: Calibration q_{ci}');
 legend('qci_w','qci_x','qci_y','qci_z');
+
+%% plot variance calibration q_ci
+
+subplot(5,1,5)
+hold on
+grid on
+
+ts_P_qci = timeseries(P_qci(:,1));
+plot(ts_P_qci);
+ts_P_qci = timeseries(P_qci(:,2));
+plot(ts_P_qci);
+ts_P_qci = timeseries(P_qci(:,3));
+plot(ts_P_qci);
+title('Variance: Calibration Pq_{ci}');
+legend('Pqci_x','Pqci_y','Pqci_z');
