@@ -5,7 +5,7 @@ close all;
 clc;
 
 if ~ exist('bag', 'var')
-    bag = rosbag('/home/dhl/git/catkin_ws/src/ekf_sensor_fusion/ssf_updates/matlab/ddrone.bag'); % realsense
+    bag = rosbag('/home/dhl/git/catkin_ws/src/ekf_sensor_fusion/ssf_updates/matlab/realsense.bag'); % realsense
 end
 
 % rosgenmsg('/home/dhl/git/catkin_ws/src/ekf_sensor_fusion/')
