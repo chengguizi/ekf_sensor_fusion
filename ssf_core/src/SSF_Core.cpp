@@ -665,7 +665,7 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 
 	// assert( !( config_.fixed_scale || config_.fixed_bias || config_.fixed_calib ) );
 
-	ROS_WARN_STREAM("\ncorrection_ " << correction_.transpose() );
+	std::cout  << std::endl << "correction_ = " << correction_.transpose();
 	// state update:
 
 	// store old values in case of fuzzy tracking

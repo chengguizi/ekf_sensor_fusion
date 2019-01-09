@@ -192,14 +192,21 @@ public:
 				R_si << normalvec_east, normalvec_north, -normalvec_down;
 			}else{
 				ROS_ERROR_STREAM("Unkown Frame: " << imu_frame);
+				exit(-1);
 			}
 
-			ROS_WARN_STREAM("Using frame: " << imu_frame);
+			ROS_WARN_STREAM("Using frame: " << imu_frame << ", R_si = " << std::endl << R_si);
 
-			R_wi = R_si * R_sw.transpose();
 
 			R_is = R_si.transpose();
+
 			R_iw = R_sw * R_is;
+			R_wi = R_iw.transpose();
+
+			// R_wi = R_si * R_sw.transpose();
+
+			// R_is = R_si.transpose();
+			// R_iw = R_sw * R_is;
 
 			
 			std::cout << "R_iw = " << std::endl << R_iw << std::endl;
@@ -402,8 +409,10 @@ private:
 	{
 		std::cout << "calculated q_iw_ = " << q_iw_.w() << ", " << q_iw_.vec().transpose() << std::endl; // w, x y z
 
-		auto q_iw_m_ = Eigen::Quaternion<double>(R_sw)*q_m_;
-		std::cout << "compared to measured R_sw * q_m_ = " << q_iw_m_.w() << ", " << q_iw_m_.vec().transpose() << std::endl;
+		auto R_is = q_m_.toRotationMatrix();
+		std::cout << "R_is = " << std::endl << R_is << std::endl;
+		auto q_iw_m_ = Eigen::Quaternion<double>(R_sw * R_is);
+		std::cout << "compared to measured R_sw * R(q_m_) = " << q_iw_m_.w() << ", " << q_iw_m_.vec().transpose() << std::endl;
 
 
 		double dev = 180.0/M_PI*std::acos( 2 * std::pow(q_iw_m_.coeffs().dot(q_iw_.coeffs()),2.0) - 1.0 );
