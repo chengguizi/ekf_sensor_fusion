@@ -6,7 +6,7 @@ imu_frame: NED # NED, ENU, NWU
 use_imu_internal_q: true
 sigma_distance_scale: 3
 
-max_state_measurement_variance_ratio: 100
+max_state_measurement_variance_ratio: 30
 
 scale_init: 1.0
 fixed_scale: false

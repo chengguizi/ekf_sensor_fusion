@@ -4,9 +4,9 @@ pose_of_camera_not_imu: false # for ekf output
 
 use_imu_internal_q: true # use internal q from imu as the initial state q
 imu_frame: NWU # NED, ENU, NWU
-sigma_distance_scale: 3
+sigma_distance_scale: 5
 
-max_state_measurement_variance_ratio: 100
+max_state_measurement_variance_ratio: 30
 
 scale_init: 1.0
 fixed_scale: false
@@ -24,26 +24,26 @@ noise_accbias: 0.0002
 noise_gyr: 0.008
 noise_gyrbias:  0.00002
 
-noise_scale: 0.00001
+noise_scale: 0.0
 noise_qwv: 0.0
-noise_qci: 0.00001
-noise_pic: 0.0002
+noise_qci: 0.0
+noise_pic: 0.0
 delay: 0
 
 # for visensor measurement
 # this value is after squared and discretisation
-meas_noise1: 0.008
-meas_noise2: 0.0005
+meas_noise1: 0.008 # veclocity measurement
+meas_noise2: 0.01 # quaternion measurement
 
 # initialization of camera w.r.t. IMU
 init/q_ci/w: 0.9998
 init/q_ci/x: -0.0156 
-init/q_ci/y: 0.045 # 0.0089 
+init/q_ci/y: 0.036 # 0.0089 
 init/q_ci/z: -0.0097
 
-init/p_ci/x: 0.046
-init/p_ci/y: 0.0
-init/p_ci/z: 0.05
+init/p_ci/x: 0.04
+init/p_ci/y: 0.06
+init/p_ci/z: 0.02
 
 init/q_sw/w: 1
 init/q_sw/x: 0.0
