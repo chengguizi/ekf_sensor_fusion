@@ -24,21 +24,21 @@ noise_accbias: 0.0002
 noise_gyr: 0.008
 noise_gyrbias:  0.00002
 
-noise_scale: 0.0001
+noise_scale: 0.00001
 noise_qwv: 0.0
-noise_qci: 0.000002
-noise_pic: 0.0005
+noise_qci: 0.00001
+noise_pic: 0.0002
 delay: 0
 
 # for visensor measurement
 # this value is after squared and discretisation
-meas_noise1: 0.005
+meas_noise1: 0.008
 meas_noise2: 0.0005
 
 # initialization of camera w.r.t. IMU
 init/q_ci/w: 0.9998
 init/q_ci/x: -0.0156 
-init/q_ci/y: 0.0089 
+init/q_ci/y: 0.045 # 0.0089 
 init/q_ci/z: -0.0097
 
 init/p_ci/x: 0.046
