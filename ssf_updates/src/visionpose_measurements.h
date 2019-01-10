@@ -452,7 +452,7 @@ private:
 		double init_nv = 0.0;
 		double init_nq = 0.02;
 		double init_nbw = 0.0005;
-		double init_nba = 0.02;
+		double init_nba = 0.04;
 		double init_L = 0.001;
 		double init_qwv = 0;
 		double init_qci = 0.005;

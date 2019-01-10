@@ -20,7 +20,7 @@ fixed_calib: false
 # noise_gyrbias: 4.0e-06
 
 noise_acc: 0.01
-noise_accbias: 0.0002
+noise_accbias: 0.0004
 noise_gyr: 0.008
 noise_gyrbias:  0.00002
 
