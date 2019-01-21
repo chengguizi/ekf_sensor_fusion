@@ -46,8 +46,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 int noise_iterator = 1;
 
-VisionPoseSensorHandler::VisionPoseSensorHandler(ssf_core::Measurements* meas) :    // parent class pointer points child class
-	MeasurementHandler(meas), lastMeasurementTime_(ros::Time(0))
+VisionPoseSensorHandler::VisionPoseSensorHandler(ssf_core::Measurements* meas, Eigen::Matrix3d R_sw) :    // parent class pointer points child class
+	R_sw(R_sw), MeasurementHandler(meas), lastMeasurementTime_(ros::Time(0))
 {
 	// read some parameters
 	ros::NodeHandle pnh("~");
@@ -61,17 +61,17 @@ VisionPoseSensorHandler::VisionPoseSensorHandler(ssf_core::Measurements* meas) :
 
 
 	// Obtain transformation between sensor global frame and ekf global frame (ENU)
-	Eigen::Quaternion<double> q_sw_;
-        pnh.getParam("init/q_sw/w", q_sw_.w());
-        pnh.getParam("init/q_sw/x", q_sw_.x());
-        pnh.getParam("init/q_sw/y", q_sw_.y());
-        pnh.getParam("init/q_sw/z", q_sw_.z());
+	// Eigen::Quaternion<double> q_sw_;
+    //     pnh.getParam("init/q_sw/w", q_sw_.w());
+    //     pnh.getParam("init/q_sw/x", q_sw_.x());
+    //     pnh.getParam("init/q_sw/y", q_sw_.y());
+    //     pnh.getParam("init/q_sw/z", q_sw_.z());
 
-        ROS_INFO_STREAM(" q_sw_ " << q_sw_.w() << ", " << q_sw_.vec().transpose());
+    //     ROS_INFO_STREAM(" q_sw_ " << q_sw_.w() << ", " << q_sw_.vec().transpose());
 
-	q_sw_.normalize();
+	// q_sw_.normalize();
 
-	R_sw = q_sw_.toRotationMatrix();
+	// R_sw = q_sw_.toRotationMatrix();
 
 	ROS_WARN_COND(use_fixed_covariance_, "using fixed covariance");
 	ROS_WARN_COND(!use_fixed_covariance_, "using covariance from sensor");
@@ -342,7 +342,7 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	const double velocity_std_dev = std::sqrt(state_old.P_.diagonal().block<3,1>(3,0).norm());
 	const double velocity_measurement_std_dev = std::sqrt(R(0,0));
 	double sigma_distance = sigma_distance_scale * ( velocity_measurement_std_dev + velocity_std_dev);
-	ROS_INFO_STREAM_THROTTLE(2, "vel error = " << velocity_err_distance << ", " << sigma_distance_scale << "sigma distance = " << sigma_distance);
+	ROS_INFO_STREAM_THROTTLE(5, "vel error = " << velocity_err_distance << ", " << sigma_distance_scale << "sigma distance = " << sigma_distance);
 	if (velocity_std_dev < velocity_measurement_std_dev && velocity_err_distance > sigma_distance)
 	{
 		ROS_WARN_STREAM("Big Velocity Difference Detected: " << velocity_err_distance << ", compared to sigma-distance: " << sigma_distance << ", variance P.v.norm() =" << velocity_std_dev );

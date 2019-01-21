@@ -89,13 +89,14 @@ void SSF_Core::initialize(const Eigen::Matrix<double, 3, 1> & p, const Eigen::Ma
 													const Eigen::Quaternion<double> & q_wv, const Eigen::Matrix<double, N_STATE, N_STATE> & P,
 													const Eigen::Matrix<double, 3, 1> & w_m, const Eigen::Matrix<double, 3, 1> & a_m,
 													const Eigen::Matrix<double, 3, 1> & m_m, const Eigen::Matrix<double, 3, 1> & g, 
-													const Eigen::Quaternion<double> & q_ci, const Eigen::Matrix<double, 3, 1> & p_ci)
+													const Eigen::Quaternion<double> & q_ci, const Eigen::Matrix<double, 3, 1> & p_ci, const Eigen::Quaterniond & q_ib)
 {
 
 	// init state buffer
 	for (int i = 0; i < N_STATE_BUFFER; i++)
 	{
 		StateBuffer_[i].reset();
+		StateBuffer_[i].setImuBaselineCalibration(q_ib);
 	}
 
 	idx_state_ = 0;
@@ -272,8 +273,8 @@ void SSF_Core::imuCallback(const sensor_msgs::ImuConstPtr & msg, const sensor_ms
 
 	//predictionMade_ = true;
 
-	msgPose_.header.stamp = msg->header.stamp;
-	msgPose_.header.seq = msg->header.seq;
+	msgPose_local_.header.stamp = msgPose_.header.stamp = msg->header.stamp;
+	// msgPose_.header.seq = msg->header.seq;
 
 	State &updated_state = StateBuffer_[(unsigned char)(idx_state_ - 1)];
 
@@ -700,9 +701,9 @@ bool SSF_Core::applyCorrection(unsigned char idx_delaystate, const ErrorState & 
 	delaystate.q_ = delaystate.q_ * qbuff_q;
 	delaystate.q_.normalize();
 
-	auto qbuff_qwv = quaternionFromSmallAngle(correction_.block<3, 1> (16, 0));
-	delaystate.q_wv_ = delaystate.q_wv_ * qbuff_qwv;
-	delaystate.q_wv_.normalize();
+	// auto qbuff_qwv = quaternionFromSmallAngle(correction_.block<3, 1> (16, 0));
+	// delaystate.q_wv_ = delaystate.q_wv_ * qbuff_qwv;
+	// delaystate.q_wv_.normalize();
 
 	auto qbuff_qci = quaternionFromSmallAngle(correction_.block<3, 1> (19, 0));
 	delaystate.q_ci_ = delaystate.q_ci_ * qbuff_qci;

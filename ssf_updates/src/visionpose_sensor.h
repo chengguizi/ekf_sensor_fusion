@@ -68,8 +68,8 @@ private:
   }
 
 public:
-  VisionPoseSensorHandler();
-  VisionPoseSensorHandler(ssf_core::Measurements* meas);
+  VisionPoseSensorHandler() = delete;
+  VisionPoseSensorHandler(ssf_core::Measurements* meas, Eigen::Matrix3d R_sw);
 };
 
 #endif /* VISIONPOSE_SENSOR_H */

@@ -64,7 +64,7 @@ public:
 
   // states not varying during propagation
   double L_;                              ///< visual scale                     (16 / 15)
-  Eigen::Quaternion<double> q_wv_;        ///< vision-world attitude drift      (17-20 / 16-18)
+  Eigen::Quaternion<double> q_wv_;        ///< vision-world attitude (vision frame is the initial imu-world attitude)      (17-20 / 16-18)
   Eigen::Quaternion<double> q_ci_;        ///< camera-imu attitude calibration  (21-24 / 19-21)
   Eigen::Matrix<double, 3, 1> p_ci_;      ///< camera-imu position calibration  (25-27 / 22-24)
 
@@ -82,6 +82,8 @@ public:
 
   State();
 
+  Eigen::Quaterniond q_ib_; // imu-baseline attitude calibration
+
   double time_; ///< time of this state estimate
   int seq_; ///HM: < sequence of measurement message
 
@@ -90,6 +92,8 @@ public:
    * 3D vectors: 0; quaternion: unit quaternion; scale: 1; time:0; Error covariance: zeros
    */
   void reset();
+
+  void setImuBaselineCalibration(Eigen::Quaterniond q_ib);
 
   /// writes the covariance corresponding to position and attitude to cov
   void getPoseCovariance(geometry_msgs::PoseWithCovariance::_covariance_type & cov);

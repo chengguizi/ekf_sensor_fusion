@@ -64,6 +64,11 @@ void State::reset(){
 	seq_ = 0;
 }
 
+void State::setImuBaselineCalibration(Eigen::Quaterniond q_ib)
+{
+	q_ib_ = q_ib;
+}
+
 void State::getPoseCovariance(geometry_msgs::PoseWithCovariance::_covariance_type & cov)
 {
 	assert(cov.size() == 36);
@@ -83,11 +88,20 @@ void State::getPoseCovariance(geometry_msgs::PoseWithCovariance::_covariance_typ
 
 void State::toPoseMsg_imu(geometry_msgs::PoseWithCovarianceStamped & pose, bool isLocal)
 {
-	
+
+	// Eigen::Matrix3d R_ib; // NED in NWU, -90 degree mounting
+
+	// R_ib << 0, 1, 0,
+	// 		1, 0, 0,
+	// 		0, 0,-1;
+
+	// q_ib_ = Eigen::Quaterniond(R_ib);
+
 	if(isLocal)
 	{
-		eigen_conversions::vector3dToPoint(q_wv_*p_, pose.pose.pose.position);
-		eigen_conversions::quaternionToMsg(q_wv_*q_, pose.pose.pose.orientation);
+		// T_bb =  T_ib * T_i0w.inverse() * T_iw * T_ib.inverse()
+		eigen_conversions::vector3dToPoint(q_ib_*q_wv_*p_, pose.pose.pose.position); // q_wv_ store the inverse of the initial imu-world attitude
+		eigen_conversions::quaternionToMsg(q_ib_*q_wv_*q_*q_ib_.inverse(), pose.pose.pose.orientation); // (q_wv_*q_) gives attitude in the initial imu frame
 	}
 	else
 	{
@@ -104,8 +118,8 @@ void State::toPoseMsg_camera(geometry_msgs::PoseWithCovarianceStamped & pose, bo
 	const static Eigen::Quaternion<double> q_calt_c(-0.5,0.5,0.5,0.5); //w,x,y,z . rotation matrix [0 1 0; 0 0 1 ; 1 0 0]
 	if(isLocal)
 	{
-		eigen_conversions::vector3dToPoint(q_wv_*p_, pose.pose.pose.position);
-		eigen_conversions::quaternionToMsg(q_wv_*q_*q_ci_*q_calt_c, pose.pose.pose.orientation);
+		eigen_conversions::vector3dToPoint(q_ib_*q_wv_*p_, pose.pose.pose.position);
+		eigen_conversions::quaternionToMsg(q_ib_*q_wv_*q_*q_ci_*q_calt_c*q_ib_.inverse(), pose.pose.pose.orientation);
 	}
 	else
 	{
@@ -114,7 +128,7 @@ void State::toPoseMsg_camera(geometry_msgs::PoseWithCovarianceStamped & pose, bo
 	}	
 	getPoseCovariance(pose.pose.covariance);
 
-        pose.header.frame_id = "map";
+        pose.header.frame_id = "map_camera";
 }
 
 void State::toIntPoseMsg(geometry_msgs::PoseWithCovarianceStamped & pose){

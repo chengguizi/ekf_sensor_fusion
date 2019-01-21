@@ -48,7 +48,39 @@ class VisionPoseMeasurements : public ssf_core::Measurements
 public:
 	VisionPoseMeasurements() // hm: the first constructor to call, since "main.cpp"
 	{
-		addHandler(new VisionPoseSensorHandler(this));
+		ros::NodeHandle pnh("~");
+		pnh.param("use_imu_internal_q", use_imu_internal_q, false);
+		pnh.param<std::string>("imu_frame", imu_frame, "NED");
+		pnh.param<std::string>("ekf_frame", ekf_frame, "NWU");
+
+		// Calculate R_sw from frame configurations
+
+		if (ekf_frame == "NWU"){
+
+			if (imu_frame == "NED"){
+				R_sw << 1 , 0 , 0 ,
+						0 , -1, 0 ,
+						0 , 0 , -1;	
+			}else if (imu_frame == "ENU"){
+				R_sw << 0 , 1 , 0 ,
+						-1, 0 , 0 ,
+						0 , 0 , 1;	
+			}else if (imu_frame == "NWU"){
+				R_sw.setIdentity();
+			}else{
+				ROS_FATAL("Unkown imu frame");
+				exit(-1);
+			}
+
+		}else{
+			ROS_FATAL("Unkown EKF global frame");
+			exit(-1);
+		}
+
+		ROS_INFO_STREAM("imu_frame: " << imu_frame << ", ekf_frame: " << ekf_frame);
+		ROS_INFO_STREAM("R_sw: " << std::endl << R_sw);
+
+		addHandler(new VisionPoseSensorHandler(this, R_sw));
 		// hm: addHandler is defined in "measurement.h" in ssf_core
 		// data structure is std::vector<MeasurementHandler*>
 		// "handlers" is not really used, only for keeping track of the new object, and to be destroyed in the desctructor
@@ -62,10 +94,7 @@ public:
 		// VisionPoseSensorHandler(*) is responsible for handling measurementCallback
 		// - it also inherit and public SSF_Core() instance: ssf_core_. this is how SSF_core is engaged
 
-		ros::NodeHandle pnh("~");
-		pnh.param("use_imu_internal_q", use_imu_internal_q, false);
-		pnh.param<std::string>("imu_frame", imu_frame, "NED");
-
+		
 
 		pnh.param("init/p_ci/x", p_ci_[0], 0.0);
 		pnh.param("init/p_ci/y", p_ci_[1], 0.0);
@@ -77,44 +106,22 @@ public:
 		pnh.param("init/q_ci/z", q_ci_.z(), 0.0);
 		q_ci_.normalize();
 
-		pnh.param("init/q_wv/w", q_wv_.w(), 1.0);
-		pnh.param("init/q_wv/x", q_wv_.x(), 0.0);
-		pnh.param("init/q_wv/y", q_wv_.y(), 0.0);
-		pnh.param("init/q_wv/z", q_wv_.z(), 0.0);
-		q_wv_.normalize();
-
-		Eigen::Quaternion<double> q_sw_;
-		pnh.getParam("init/q_sw/w", q_sw_.w());
-		pnh.getParam("init/q_sw/x", q_sw_.x());
-		pnh.getParam("init/q_sw/y", q_sw_.y());
-		pnh.getParam("init/q_sw/z", q_sw_.z());
-		q_sw_.normalize();
-
-		R_sw = q_sw_.toRotationMatrix();
-
-		// the sensor's world frame of Ellipse is NED, we are using ENU, therefore conversion is needed.
-		
-		//R_sw << 0 , 1 , 0,
-		//1 , 0 , 0,
-		//0 , 0 , -1;
-
-		// For Visensor, imu's global frame is NWU, we are still using ENU	
-
-		// R_sw << 0 , 1 , 0,
-        //         -1 , 0 , 0,
-        //         0 , 0 , 1;
-
-		
+		// imu-baseline mounting calibration
+		pnh.getParam("init/q_ib/w", q_ib_.w());
+		pnh.getParam("init/q_ib/x", q_ib_.x());
+		pnh.getParam("init/q_ib/y", q_ib_.y());
+		pnh.getParam("init/q_ib/z", q_ib_.z());
+		q_ib_.normalize();
 
 		pnh.param("scale_init", scale_, 1.0);
 
 
 		ROS_INFO_STREAM("p_ci_: (x,y,z): ["  << p_ci_.x() << ", " << p_ci_.y() << ", " << p_ci_.z()  << "]");
 		ROS_INFO_STREAM("q_ci_: (w,x,y,z): [" << q_ci_.w() << ", " << q_ci_.x() << ", " << q_ci_.y() << ", " << q_ci_.z()  << "]");
-		ROS_INFO_STREAM("q_wv_: (w,x,y,z): [" << q_wv_.w() << ", " << q_wv_.x() << ", " << q_wv_.y() << ", " << q_wv_.z()  << "]");
-		ROS_INFO_STREAM("R_sw: " << std::endl << R_sw);
+		ROS_INFO_STREAM("q_ib_: (w,x,y,z): [" << q_ib_.w() << ", " << q_ib_.x() << ", " << q_ib_.y() << ", " << q_ib_.z()  << "]");
+		
 		ROS_INFO_STREAM("scale_: " << scale_);
-		ROS_INFO_STREAM("imu_frame: " << imu_frame);
+		
 	}
 
 	bool initStateZero(struct ssf_core::ImuInputsCache& imuEstimateMean)
@@ -216,13 +223,14 @@ public:
 		}
 		else{ // use imu internal q
 			ROS_WARN("USING IMU INTERNAL QUATERNION ESTIMATION.");
-			q_iw_ = R_sw * imuEstimateMean.q_m_;
+			q_iw_ = R_sw * imuEstimateMean.q_m_; // R_is
 			R_iw = q_iw_.toRotationMatrix();
 			R_wi = R_iw.transpose();
 		}
 		
 		// Initialise world frame in local frame
-		q_wv_ = q_iw_.inverse();
+		q_wv_ = (q_iw_).inverse();
+		ROS_INFO_STREAM("q_wv_: (w,x,y,z): [" << q_wv_.w() << ", " << q_wv_.x() << ", " << q_wv_.y() << ", " << q_wv_.z()  << "]");
 
 		g_ << 0, 0, (R_iw*imuEstimateMean.a_m_)(2) ; // gravity is in z-axis, using ENU coordinate
 		std::cout << "g_ = " << std::endl << g_.transpose() << std::endl << "a_m_ norm = " << imuEstimateMean.a_m_.norm() << std::endl;
@@ -231,7 +239,7 @@ public:
 		/// Bias Estimation
 		//////////////////////////////////
 
-		Eigen::Vector3d g_imu = imuEstimateMean.a_m_.array();
+		// Eigen::Vector3d g_imu = imuEstimateMean.a_m_.array();
 
 		// b_a_ = R_wi * (R_iw * g_imu - g_);	// use estimated bias as the initial state
 		b_a_ << 0, 0, 0;
@@ -398,10 +406,12 @@ private:
 	Eigen::Matrix<double, 3, 1> w_m_, a_m_, m_m_;
 	Eigen::Quaternion<double> q_m_;
 
+	Eigen::Quaterniond q_ib_; //  imu - baseline mounting calibration
+
 	double scale_;
 
     bool use_imu_internal_q;
-	std::string imu_frame;
+	std::string imu_frame, ekf_frame;
 
 	ssf_core::SSF_Core::ErrorStateCov P_;
 
@@ -475,7 +485,7 @@ private:
 		std::cout << "P diagonal = " << P_diagonal.transpose() << std::endl;
 
 
-		ssf_core_.initialize(p_iw_, v_iw_, q_iw_, b_w_, b_a_, scale_, q_wv_, P_, w_m_, a_m_, m_m_, g_, q_ci_, p_ci_);
+		ssf_core_.initialize(p_iw_, v_iw_, q_iw_, b_w_, b_a_, scale_, q_wv_, P_, w_m_, a_m_, m_m_, g_, q_ci_, p_ci_, q_ib_);
 
 		ROS_INFO_STREAM("===================filter state[0] initialized to================= \n"
 				<< "\tposition: [" << p_iw_[0] << ", " << p_iw_[1] << ", " << p_iw_[2] << "]" << std::endl

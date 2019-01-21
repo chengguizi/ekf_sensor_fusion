@@ -103,7 +103,7 @@ public:
 									const Eigen::Matrix<double, N_STATE, N_STATE> & P, const Eigen::Matrix<double, 3, 1> & w_m,
 									const Eigen::Matrix<double, 3, 1> & a_m, const Eigen::Matrix<double, 3, 1> & m_m,
 									const Eigen::Matrix<double, 3, 1> & g,
-									const Eigen::Quaternion<double> & q_ci, const Eigen::Matrix<double, 3, 1> & p_ci);
+									const Eigen::Quaternion<double> & q_ci, const Eigen::Matrix<double, 3, 1> & p_ci, const Eigen::Quaterniond & q_ib);
 
 	/// retreive all state information at time t. Used to build H, residual and noise matrix by update sensors
 	ClosestStateStatus getClosestState(State*& timestate, ros::Time tstamp, double delay, unsigned char &idx);
@@ -369,15 +369,15 @@ public:
 
 			std::cout << "P before update: " << std::endl <<  P.diagonal().transpose() << std::endl; //P.diagonal().transpose()
 
-			std::cout << "H_delayed: " << std::endl << H_delayed << std::endl;
+			// std::cout << "H_delayed: " << std::endl << H_delayed << std::endl;
 
 			S = H_delayed * StateBuffer_[idx_delaystate].P_ * H_delayed.transpose() + R_delayed;
 			K = P * H_delayed.transpose() * S.inverse();
 
 			// std::cout << "K: " << std::endl << K << std::endl;
 
-			auto debug_c1 = (K.block(15,0,1,3)) * (res_delayed.block(0,0,3,1));
-			auto debug_c2 = (K.block(15,3,1,3)) * (res_delayed.block(3,0,3,1));
+			// auto debug_c1 = (K.block(15,0,1,3)) * (res_delayed.block(0,0,3,1));
+			// auto debug_c2 = (K.block(15,3,1,3)) * (res_delayed.block(3,0,3,1));
 
 			correction_ = K * res_delayed;
 
