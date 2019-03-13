@@ -4,8 +4,7 @@ pose_of_camera_not_imu: false # for ekf output
 
 use_imu_internal_q: true # use internal q from imu as the initial state q
 imu_frame: NWU # NED, ENU, NWU
-ekf_frame: NWU # NWU follows ROS convension
-sigma_distance_scale: 10
+sigma_distance_scale: 3
 
 max_state_measurement_variance_ratio: 100
 

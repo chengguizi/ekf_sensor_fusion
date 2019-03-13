@@ -10,7 +10,7 @@ sigma_distance_scale: 10
 max_state_measurement_variance_ratio: 100
 
 scale_init: 1.0
-fixed_scale: false
+fixed_scale: true
 fixed_bias: false
 fixed_calib: true
 
@@ -38,7 +38,7 @@ delay: -0.03
 
 # for visensor measurement
 # meas_noise1: 0.005
-meas_noise2: 0.01
+meas_noise2: 0.005
 
 # initialization of camera w.r.t. IMU
 init/q_ci/w: 0
