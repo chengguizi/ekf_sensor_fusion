@@ -5,7 +5,7 @@ pose_of_camera_not_imu: false # for ekf output
 imu_frame: NED # NED, ENU, NWU
 ekf_frame: NWU # NWU follows ROS convension
 use_imu_internal_q: true
-sigma_distance_scale: 10
+sigma_distance_scale: 5
 
 max_state_measurement_variance_ratio: 100
 
@@ -26,7 +26,7 @@ fixed_calib: true
 # noise_gyrbias:  1.0e-5
 
 noise_acc: 0.01
-noise_accbias: 0.0004
+noise_accbias: 0.0002
 noise_gyr: 0.008
 noise_gyrbias:  0.00002
 
@@ -38,7 +38,7 @@ delay: -0.03
 
 # for visensor measurement
 # meas_noise1: 0.005
-meas_noise2: 0.005
+meas_noise2: 0.002
 
 # initialization of camera w.r.t. IMU
 init/q_ci/w: 0

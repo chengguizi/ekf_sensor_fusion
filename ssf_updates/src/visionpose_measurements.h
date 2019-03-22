@@ -246,7 +246,7 @@ public:
 
 		// hm: initial value of w bias is VERY IMPORTANT!
 		b_w_ = imuEstimateMean.w_m_.array(); // use estimated bias as the initial state
-		// b_w_ << 0, 0, 0;
+		b_w_ << 0, 0, 0;
 
 		return init();
 		// global_start is not yet set
