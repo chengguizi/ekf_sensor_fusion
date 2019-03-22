@@ -100,11 +100,20 @@ int main(int argc, char** argv)
 	// _reset_pub.publish(header);
 	// ros::spinOnce();
 
-	ros::Duration(0.5).sleep();
+	spinner.start();
+	ROS_INFO("============== MAIN(): Waiting for VO input before initialisation ===================");
+	while(ros::ok()){
+		ros::Duration(0.5).sleep();
+
+		if ( VisionPoseMeas.isMeasurementReceived() )
+			break;
+	}
+	spinner.stop();
 	
 	while(ros::ok()){
 		spinner.start();
-		while (ros::ok() && true){
+		ROS_INFO("============== MAIN(): Initialise IMU ===================");
+		while (ros::ok()){
 			// STEP 1, Wait for IMU input to be available, stabilised
 			struct ssf_core::ImuInputsCache imuEstimateMean;
 			VisionPoseMeas.initialiseIMU(imuEstimateMean);

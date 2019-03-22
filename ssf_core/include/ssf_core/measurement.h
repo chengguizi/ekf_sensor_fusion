@@ -33,6 +33,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define MEASUREMENT_H
 
 #include <ssf_core/SSF_Core.h>
+#include <ros/time.h>
 
 namespace ssf_core{
 
@@ -48,6 +49,8 @@ protected:
 
 	void Config(ssf_core::SSF_CoreConfig &config, uint32_t level);
 	virtual	bool init() = 0;
+
+	
 
 public:
 
@@ -71,9 +74,19 @@ class MeasurementHandler
 protected:
 	Measurements* measurements;
 
+	ros::Time lastMeasurementTime_;
+
+
+	void initMeasurement(){
+      lastMeasurementTime_ =  ros::Time(0);
+  	}
+
+
 public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-	MeasurementHandler(Measurements* meas):measurements(meas){}
+	MeasurementHandler(Measurements* meas):measurements(meas), lastMeasurementTime_(ros::Time(0)){}
+
+	ros::Time get_lastMeasurementTime(){return lastMeasurementTime_;};
 
 	virtual ~MeasurementHandler() {}
 };

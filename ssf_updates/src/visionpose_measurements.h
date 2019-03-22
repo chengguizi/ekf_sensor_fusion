@@ -386,6 +386,17 @@ public:
 		return last_imu_time;
 	}
 
+	bool isMeasurementReceived()
+	{
+		bool no_measurement = false;
+		for (auto handler : handlers){
+			if (handler->get_lastMeasurementTime() == ros::Time(0)) // not ready
+				no_measurement = true;
+		}
+
+		return !no_measurement;
+	}
+
 private:
 
 	Eigen::Matrix3d R_sw; // transform between sensor's global frame and ekf's global frame

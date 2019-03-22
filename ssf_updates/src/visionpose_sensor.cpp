@@ -47,7 +47,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 int noise_iterator = 1;
 
 VisionPoseSensorHandler::VisionPoseSensorHandler(ssf_core::Measurements* meas, Eigen::Matrix3d R_sw) :    // parent class pointer points child class
-	R_sw(R_sw), MeasurementHandler(meas), lastMeasurementTime_(ros::Time(0))
+	MeasurementHandler(meas), R_sw(R_sw)
 {
 	// read some parameters
 	ros::NodeHandle pnh("~");
@@ -343,7 +343,7 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	const double velocity_measurement_std_dev = std::sqrt(R(0,0));
 	double sigma_distance = sigma_distance_scale * ( velocity_measurement_std_dev + velocity_std_dev);
 	ROS_INFO_STREAM_THROTTLE(5, "vel error = " << velocity_err_distance << ", " << sigma_distance_scale << "sigma distance = " << sigma_distance);
-	if (velocity_std_dev < velocity_measurement_std_dev && velocity_err_distance > sigma_distance)
+	if (velocity_std_dev < 0.5 * velocity_measurement_std_dev && velocity_err_distance > sigma_distance)
 	{
 		ROS_WARN_STREAM("Big Velocity Difference Detected: " << velocity_err_distance << ", compared to sigma-distance: " << sigma_distance << ", variance P.v.norm() =" << velocity_std_dev );
 		do_update = false;
@@ -353,7 +353,7 @@ void VisionPoseSensorHandler::noiseConfig(ssf_core::SSF_CoreConfig& config, uint
 	Eigen::Matrix<double, 3, 3> R_ci = state_old.q_ci_.toRotationMatrix();
 
 	// this distance is between greater than zero
-	double w_err_distance = (state_old.w_m_ - R_ci * rotation_vector).norm() / (rotation_vector.norm() + 0.1);
+	double w_err_distance = (state_old.w_m_ - R_ci * rotation_vector).norm() / (rotation_vector.norm() + 0.2);
 
 	double w_sigma_distance = sigma_distance_scale * 0.1;
 	if (w_err_distance > w_sigma_distance)

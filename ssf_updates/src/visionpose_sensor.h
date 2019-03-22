@@ -56,20 +56,18 @@ private:
   int max_state_measurement_variance_ratio_;
   double sigma_distance_scale;
 
-  ros::Time lastMeasurementTime_;
+  
 
   void subscribe();
   void measurementCallback(const geometry_msgs::PoseWithCovarianceStampedConstPtr poseMsg);
   void magTimerCallback(const ros::TimerEvent& te);
   void noiseConfig(ssf_core::SSF_CoreConfig& config, uint32_t level);
 
-  void initMeasurement(){
-      lastMeasurementTime_ =  ros::Time(0);
-  }
-
+  
 public:
   VisionPoseSensorHandler() = delete;
   VisionPoseSensorHandler(ssf_core::Measurements* meas, Eigen::Matrix3d R_sw);
+  
 };
 
 #endif /* VISIONPOSE_SENSOR_H */

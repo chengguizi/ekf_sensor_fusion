@@ -9,7 +9,7 @@ sigma_distance_scale: 3
 max_state_measurement_variance_ratio: 100
 
 scale_init: 1.0
-fixed_scale: false
+fixed_scale: true
 fixed_bias: false
 fixed_calib: false
 
